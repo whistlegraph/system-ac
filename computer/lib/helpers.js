@@ -1,0 +1,20 @@
+// 📚 Helpers
+
+/*
+export function times(n, fun) {
+  const accum = Array(Math.max(0, n));
+  for (let i = 0; i < n; i += 1) accum[i] = fun();
+  return accum;
+}
+*/
+
+// Generate a sealed object with named keys set to undefined.
+export function apiObject() {
+  const obj = {}
+  
+  for (const key of arguments) {
+    obj[key] = undefined;
+  }
+  
+  return Object.seal(obj);
+}

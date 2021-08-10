@@ -1,0 +1,16 @@
+body {
+  background-color: black;
+  touch-action: none;
+  overflow: hidden;
+  margin: 0;
+  display: flex;
+  cursor: none;
+  height: 100%;
+}
+
+canvas {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  margin: auto;
+  background-color: black;
+}
