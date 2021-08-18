@@ -3,7 +3,6 @@
 import * as Loop from "./lib/loop.js";
 import * as Pen from "./lib/pen.js";
 import * as Graph from "./lib/graph.js";
-import { randInt, dist } from "./lib/num.js";
 import { apiObject } from "./lib/helpers.js";
 
 // 🎬 Init Sequence
@@ -19,11 +18,15 @@ let needsReframe = false;
 
 const screen = apiObject("pixels", "width", "height");
 
+const sound = {
+  bpm: new Float32Array(1),
+};
+
 function frame() {
   const subdivisions = 2 + window.devicePixelRatio;
   const width = Math.floor(window.innerWidth / subdivisions) - 8;
   const height = Math.floor(window.innerHeight / subdivisions) - 8;
-  
+
   projectedWidth = width * subdivisions;
   projectedHeight = height * subdivisions;
 
@@ -47,7 +50,7 @@ function frame() {
   Object.assign(screen, {
     pixels: imageData.data,
     width,
-    height
+    height,
   });
 
   Graph.setBuffer(screen);
@@ -55,7 +58,7 @@ function frame() {
   Graph.setColor(25, 25, 100);
   Graph.clear(25, 25, 100);
   ctx.putImageData(imageData, 0, 0);
-  
+
   needsReframe = false;
 }
 
@@ -75,10 +78,13 @@ window.addEventListener("resize", () => {
 });
 
 // 4. Set up sound output.
+
+let updateMetronome, updateSquare;
+
 function startSound() {
   const audioContext = new AudioContext({
     latencyHint: "interactive",
-    sampleRate: 44100
+    sampleRate: 44100,
   });
 
   if (audioContext.state === "running") {
@@ -89,12 +95,33 @@ function startSound() {
     await audioContext.audioWorklet.addModule("computer/lib/speaker.js");
     const soundProcessor = new AudioWorkletNode(
       audioContext,
-      "sound-processor"
+      "sound-processor",
+      { processorOptions: { bpm: sound.bpm[0] } }
     );
+
+    updateMetronome = function (newBPM) {
+      soundProcessor.port.postMessage({
+        type: "new-bpm",
+        data: newBPM,
+      });
+    };
+
+    updateSquare = function (square) {
+      soundProcessor.port.postMessage({
+        type: "square",
+        data: square,
+      });
+    };
+
+    soundProcessor.port.onmessage = (e) => {
+      const time = e.data;
+      disk.requestBeat?.(time);
+    };
+
     soundProcessor.connect(audioContext.destination);
   })();
 
-  window.addEventListener("pointerdown", async e => {
+  window.addEventListener("pointerdown", async () => {
     if (["suspended", "interrupted"].includes(audioContext.state)) {
       audioContext.resume();
     }
@@ -114,7 +141,7 @@ function point(x, y) {
   // Map host display coordinate to the system screen.
   return {
     x: Math.floor(((x - canvasRect.x) / projectedWidth) * screen.width),
-    y: Math.floor(((y - canvasRect.y) / projectedHeight) * screen.height)
+    y: Math.floor(((y - canvasRect.y) / projectedHeight) * screen.height),
   };
 }
 
@@ -122,36 +149,40 @@ const pen = Pen.init(point);
 
 // 6. Define a blank starter disk that just renders noise and plays a tone.
 let disk = {
+  beat: function beat($) {
+    console.log("Beat:", $);
+  },
   update: function update() {},
   render: function render($) {
-    const { screen, noise16 } = $;
+    const { noise16 } = $;
     noise16();
-  }
+  },
 };
 
 // 💾 Boot the system and load a disk.
-async function boot(path, host = window.location.host) {
+async function boot(path = "index", bpm = 60, host = window.location.host) {
   // Try to load the disk as a worker first.
   // Safari and FF support is coming for worker module imports: https://bugs.webkit.org/show_bug.cgi?id=164860
   const worker = new Worker("./computer/lib/disk.js", { type: "module" });
 
-  let send = e => worker.postMessage(e);
+  let send = (e) => worker.postMessage(e);
   let onMessage = loaded;
-  worker.onmessage = e => onMessage(e);
+  worker.onmessage = (e) => onMessage(e);
 
   // Rewire things a bit if workers with modules are not supported (Safari & FF).
-  worker.onerror = async e => {
+  worker.onerror = async () => {
     console.error("Disk worker failure. Trying to load disk into main thread.");
     const module = await import("./lib/disk.js");
-    module.noWorker.postMessage = e => onMessage(e); // Define the disk's postMessage replacement.
-    send = e => module.noWorker.onMessage(e); // Hook up our post method to disk's onmessage replacement.
+    module.noWorker.postMessage = (e) => onMessage(e); // Define the disk's postMessage replacement.
+    send = (e) => module.noWorker.onMessage(e); // Hook up our post method to disk's onmessage replacement.
     send({ path, host });
   };
 
   function loaded(e) {
     if (e.data.loaded === true) {
       console.log("💾 Loaded:", path, "🌐 from:", host);
-      onMessage = receivedFrame;
+      onMessage = receivedChange;
+      disk.requestBeat = requestBeat;
       disk.requestFrame = requestFrame;
     }
   }
@@ -159,16 +190,48 @@ async function boot(path, host = window.location.host) {
   // The initial message sends the path and host to load the disk.
   send({ path, host });
 
+  // Beat
+
+  // Set the default bpm.
+  sound.bpm.fill(bpm);
+
+  function requestBeat(time) {
+    send(
+      {
+        needsBeat: true,
+        time,
+        bpm: sound.bpm,
+        pixels: screen.pixels.buffer,
+        width: canvas.width,
+        height: canvas.height,
+        pen,
+      },
+      [sound.bpm, screen.pixels.buffer]
+    );
+  }
+
+  function receivedBeat(e) {
+    // BPM
+    if (sound.bpm[0] !== e.data.bpm[0]) {
+      sound.bpm = new Float32Array(e.data.bpm);
+      updateMetronome(sound.bpm[0]);
+    }
+
+    // SQUARE
+    if (e.data.square.note !== undefined) {
+      updateSquare(e.data.square);
+    }
+  }
+
   // Update & Render
   let frameAlreadyRequested = false;
   let startTime;
 
   function requestFrame(needsRender, updateCount) {
-   
     if (needsReframe) {
       frame();
     }
-    
+
     if (frameAlreadyRequested) {
       // console.warn("Skipped frame.");
       return;
@@ -194,19 +257,28 @@ async function boot(path, host = window.location.host) {
         pixels: screen.pixels.buffer,
         width: canvas.width,
         height: canvas.height,
-        pen
+        pen,
+        //updateMetronome,
       },
       [screen.pixels.buffer]
     );
   }
 
-  function receivedFrame(e) {
+  let frameCached = false;
+  let pixelsDidChange = false; // Can this whole thing be removed?
+
+  function receivedChange(e) {
+    // Route to received beat if this change is not a frame update.
+    if (e.data.bpm) {
+      receivedBeat(e);
+      return;
+    }
+
     // TODO: Use BitmapData objects to make this faster once it lands in Safari.
-    
     imageData = new ImageData(
       new Uint8ClampedArray(e.data.pixels), // Is this the only necessary part?
       canvas.width,
-      canvas.height 
+      canvas.height
     );
 
     screen.pixels = imageData.data;
@@ -244,28 +316,24 @@ async function boot(path, host = window.location.host) {
   }
 }
 
-function renderLoadingSpinner() { // TODO: Send the tickCount or time in here?
+function renderLoadingSpinner() {
+  // TODO: Send the tickCount or time in here?
   Graph.setColor(255, 0, 0);
   Graph.line(0, 0, 10, 10);
   Graph.line(0, 10, 10, 0);
 }
 
-// ➰ Core Loops for User Input, Object Updates, and Rendering
+// ➰ Core Loops for User Input, Music, Object Updates, and Rendering
 function input() {
   Pen.input();
 }
 
-let frameCached = false;
-let pixelsDidChange = false; // Can this whole thing be removed?
+startSound(); // This runs disk.beat
 
-startSound();
-
-Loop.start(input, function(needsRender, updateTimes) {
+// This runs disk.update and disk.render
+Loop.start(input, function (needsRender, updateTimes) {
   // console.log(updateTimes); // Note: No updates happen yet before a render.
-  if (disk.requestFrame) {
-    // TODO: This is a little janky.
-    disk.requestFrame(needsRender, updateTimes);
-  }
+  disk.requestFrame?.(needsRender, updateTimes);
 });
 
 export { boot };
