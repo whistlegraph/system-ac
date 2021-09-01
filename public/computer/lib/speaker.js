@@ -53,9 +53,34 @@ class SoundProcessor extends AudioWorkletProcessor {
           sampleRate * (this.#bpmInSec * msg.data.duration)
         );
 
-        this.#queue.push(new Square(msg.data.note, durationInFrames));
+        const attackInFrames = Math.round(durationInFrames * msg.data.attack);
+        const decayInFrames = Math.round(durationInFrames * msg.data.decay);
 
-        console.log("🎼 Square:", msg.data.note, msg.data.duration);
+        this.#queue.push(
+          new Square(
+            msg.data.tone,
+            durationInFrames,
+            attackInFrames,
+            decayInFrames,
+            msg.data.volume,
+            msg.data.pan
+          )
+        );
+
+        console.log(
+          "🎼 Square:",
+          msg.data.tone,
+          "Duration:",
+          msg.data.duration,
+          "Attack:",
+          msg.data.attack,
+          "Decay:",
+          msg.data.decay,
+          "Volume:",
+          msg.data.volume,
+          "Pan:",
+          msg.data.pan
+        );
       }
 
       // Sample
@@ -84,24 +109,26 @@ class SoundProcessor extends AudioWorkletProcessor {
     // const input = inputs[0];
     const output = outputs[0];
 
-    // Loop through each channel.
-    for (let channel = 0; channel < output.length; channel += 1) {
-      // Loop through every audio frame in the channel. (There will be many frames.)
-      for (let frame = 0; frame < output[channel].length; frame += 1) {
-        // Remove any finished instruments from the queue.
-        this.#queue = this.#queue.filter((instrument) => {
-          return instrument.playing;
-        });
+    // We assume two channels. (0 and 1)
+    for (let frame = 0; frame < output[0].length; frame += 1) {
+      // Remove any finished instruments from the queue.
+      this.#queue = this.#queue.filter((instrument) => {
+        return instrument.playing;
+      });
 
-        // Loop through every instrument in the queue and add it to the output.
-        for (const instrument of this.#queue) {
-          // For now, all sounds are maxed out and mixing happens by dividing by the total length.
-          output[channel][frame] += instrument.next / this.#queue.length;
-        }
+      // Loop through every instrument in the queue and add it to the output.
+      for (const instrument of this.#queue) {
+        // For now, all sounds are maxed out and mixing happens by dividing by the total length.
 
-        // Mix all sound through global volume.
-        output[channel][frame] = volume.apply(output[channel][frame]);
+        const amplitude = instrument.next / this.#queue.length;
+
+        output[0][frame] = instrument.pan(0, amplitude);
+        output[1][frame] = instrument.pan(1, amplitude);
       }
+
+      // Mix all sound through global volume.
+      output[0][frame] = volume.apply(output[0][frame]);
+      output[1][frame] = volume.apply(output[1][frame]);
     }
 
     return true;

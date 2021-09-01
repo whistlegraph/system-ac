@@ -48,33 +48,58 @@ function makeFrame(e) {
   $api.penChanged = e.data.penChanged;
 
   // Beat
-
   if (e.data.needsBeat) {
     $api.sound = {
       time: e.data.time,
-      bpm: e.data.bpm,
+      bpm: function (newBPM) {
+        if (newBPM) {
+          e.data.bpm[0] = newBPM;
+        }
+        return e.data.bpm[0];
+      },
     };
 
+    // TODO: Generalize this for other instruments.
     // TODO: Move this stuff to a "sound" module.
-    const square = {
-      note: undefined, // or freq?
-      duration: undefined,
-    };
+    const squares = [];
 
-    $api.sound.square = function (note, duration) {
-      square.note = note;
-      square.duration = duration;
+    // Add the ability to send multiple squares in one beat.
+
+    $api.sound.square = function (
+      tone,
+      duration = Math.random(), // Wow, default func. params can be random!
+      attack = 0,
+      decay = 0,
+      volume = 1,
+      pan = 0
+    ) {
+      squares.push({ tone, duration, attack, decay, volume, pan });
+
+      // Return a progress function so it can be used by rendering.
+      const seconds = (60 / e.data.bpm) * duration;
+      const end = e.data.time + seconds;
+      return {
+        progress: function (time) {
+          return 1 - Math.max(0, end - time) / seconds;
+        },
+      };
     };
 
     beat($api);
 
-    send({ bpm: e.data.bpm, square }, [e.data.bpm]);
+    send({ bpm: e.data.bpm, squares }, [e.data.bpm]);
+
+    squares.length = 0;
 
     return;
   }
 
   // Update
   Object.assign($api, $updateApi);
+
+  $api.sound = {
+    time: e.data.audioTime,
+  };
 
   // Don't pass pixels to updates.
   $api.screen = {

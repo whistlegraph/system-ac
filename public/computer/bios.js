@@ -80,9 +80,10 @@ window.addEventListener("resize", () => {
 // 4. Set up sound output.
 
 let updateMetronome, updateSquare;
+let audioContext;
 
 function startSound() {
-  const audioContext = new AudioContext({
+  audioContext = new AudioContext({
     latencyHint: "interactive",
     sampleRate: 44100,
   });
@@ -96,7 +97,7 @@ function startSound() {
     const soundProcessor = new AudioWorkletNode(
       audioContext,
       "sound-processor",
-      { processorOptions: { bpm: sound.bpm[0] } }
+      { outputChannelCount: [2], processorOptions: { bpm: sound.bpm[0] } }
     );
 
     updateMetronome = function (newBPM) {
@@ -148,6 +149,7 @@ function point(x, y) {
 const pen = Pen.init(point);
 
 // 6. Define a blank starter disk that just renders noise and plays a tone.
+// TODO: Is this still necessary?
 let disk = {
   beat: function beat($) {
     console.log("Beat:", $);
@@ -218,8 +220,8 @@ async function boot(path = "index", bpm = 60, host = window.location.host) {
     }
 
     // SQUARE
-    if (e.data.square.note !== undefined) {
-      updateSquare(e.data.square);
+    for (const square of e.data.squares) {
+      updateSquare(square);
     }
   }
 
@@ -254,6 +256,7 @@ async function boot(path = "index", bpm = 60, host = window.location.host) {
       {
         needsRender,
         updateCount,
+        audioTime: audioContext?.currentTime,
         pixels: screen.pixels.buffer,
         width: canvas.width,
         height: canvas.height,
