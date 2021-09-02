@@ -50,7 +50,7 @@ class SoundProcessor extends AudioWorkletProcessor {
       // Square
       if (msg.type === "square") {
         const durationInFrames = Math.round(
-          sampleRate * (this.#bpmInSec * msg.data.duration)
+          sampleRate * (this.#bpmInSec * msg.data.beats)
         );
 
         const attackInFrames = Math.round(durationInFrames * msg.data.attack);
@@ -70,8 +70,8 @@ class SoundProcessor extends AudioWorkletProcessor {
         console.log(
           "🎼 Square:",
           msg.data.tone,
-          "Duration:",
-          msg.data.duration,
+          "Beats:",
+          msg.data.beats,
           "Attack:",
           msg.data.attack,
           "Decay:",

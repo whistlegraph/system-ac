@@ -63,20 +63,18 @@ function makeFrame(e) {
     // TODO: Move this stuff to a "sound" module.
     const squares = [];
 
-    // Add the ability to send multiple squares in one beat.
-
-    $api.sound.square = function (
-      tone,
-      duration = Math.random(), // Wow, default func. params can be random!
+    $api.sound.square = function ({
+      tone = 440, // TODO: Make random.
+      beats = Math.random(), // Wow, default func. params can be random!
       attack = 0,
       decay = 0,
       volume = 1,
-      pan = 0
-    ) {
-      squares.push({ tone, duration, attack, decay, volume, pan });
+      pan = 0,
+    } = {}) {
+      squares.push({ tone, beats, attack, decay, volume, pan });
 
       // Return a progress function so it can be used by rendering.
-      const seconds = (60 / e.data.bpm) * duration;
+      const seconds = (60 / e.data.bpm) * beats;
       const end = e.data.time + seconds;
       return {
         progress: function (time) {
