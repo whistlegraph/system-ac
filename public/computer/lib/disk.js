@@ -2,53 +2,126 @@ import * as graph from "./graph.js";
 import * as num from "./num.js";
 import * as help from "./help.js";
 
-// 👩‍💻 API (Available for disks to access.)
+let boot = () => false;
+let sim = () => false;
+let paint = ($) => $.noise16();
+let beat = () => false;
 
+let loading = false;
+let paintCount = 0n;
+
+// Load the disk.
+const { load, send } = (() => {
+  let loadUrlCount = 1;
+  let loadHost;
+
+  async function load(path, host = loadHost) {
+    if (loading === false) {
+      loading = true;
+    } else {
+      // TODO: Implement some kind of loading screen system here?
+      console.warn("Already loading another disk:", path);
+      return;
+    }
+
+    console.log("💾 Loading:", path, "🌐 from:", host);
+
+    // The `loadUrlCount` query parameter busts the cache so changes can be seen if the disk code changes.
+    const fullUrl = "https://" + host + "/" + path + ".js?lc=" + loadUrlCount;
+    loadUrlCount += 1;
+
+    const module = await import(fullUrl);
+    loadHost = host;
+
+    // Artificially imposed loading by at least 1/4 sec.
+    setTimeout(() => {
+      paintCount = 0n;
+      boot = module.boot;
+      sim = module.sim;
+      paint = module.paint;
+      beat = module.beat;
+      loading = false;
+    }, 250);
+  }
+
+  const isWorker = typeof importScripts === "function";
+  const noWorker = { onMessage: undefined, postMessage: undefined };
+
+  // Start by responding to a load message, then change
+  // the message response to makeFrame.
+  if (isWorker) {
+    onmessage = async function (e) {
+      await load(e.data.path, e.data.host);
+      send({ loaded: true });
+      onmessage = makeFrame;
+    };
+  } else {
+    noWorker.onMessage = async (e) => {
+      e = { data: e };
+      await load(e.data.path, e.data.host);
+      noWorker.onMessage = (d) => makeFrame({ data: d });
+      send({ loaded: true });
+    };
+  }
+
+  function send(data) {
+    if (isWorker) {
+      postMessage(data);
+    } else {
+      noWorker.postMessage({ data });
+    }
+  }
+
+  return { load, send };
+})();
+
+// 👩‍💻 Disk API
+
+// For every function to access.
 const $commonApi = {
   num: {
     randInt: num.randInt,
     randIntRange: num.randIntRange,
     dist: num.dist,
+    radians: num.radians,
+    vec4: num.vec4,
+    vec3: num.vec3,
+    mat4: num.mat4,
   },
   help: {
     choose: help.choose,
   },
 };
 
+// Just for "update".
 const $updateApi = {
   load,
 };
 
-const $renderApi = {
-  color: graph.setColor,
+const $paintApi = {
+  // Configuration
+  color: graph.color,
+  // 2D
+  clear: graph.clear,
   plot: graph.plot,
   line: graph.line,
-  clear: graph.clear,
   noise16: graph.noise16,
+  // 3D
+  Camera: graph.Camera,
+  Form: graph.Form,
+  TRIANGLE: [
+    [0, 1, 0, 1],
+    [-1, -1, 0, 1],
+    [1, -1, 0, 1],
+  ],
 };
 
-let loading = false;
-
 function makeFrame(e) {
-  // TODO:
-  /*
-  switch(e.data.frameType) {
-  case: "beat"
-  case: "update"
-  case: "render"
-  }
-   */
-
-  // Split off two different APIs for update and render.
-
-  let $api = {};
-
-  // Common API
-  Object.assign($api, $commonApi);
-  $api.penChanged = e.data.penChanged;
-
-  // Beat
+  // 1. Beat
   if (e.data.needsBeat) {
+    const $api = {};
+    Object.assign($api, $commonApi);
+
     $api.sound = {
       time: e.data.time,
       bpm: function (newBPM) {
@@ -92,36 +165,37 @@ function makeFrame(e) {
     return;
   }
 
-  // Update
-  Object.assign($api, $updateApi);
+  // 2. Update
+  if (e.data.updateCount > 0 && paintCount > 0n) {
+    const $api = {};
+    Object.assign($api, $commonApi);
+    Object.assign($api, $updateApi);
 
-  $api.sound = {
-    time: e.data.audioTime,
-  };
+    $api.sound = {
+      time: e.data.audioTime,
+    };
 
-  // Don't pass pixels to updates.
-  $api.screen = {
-    width: e.data.width,
-    height: e.data.height,
-  };
+    // Don't pass pixels to updates.
+    $api.screen = {
+      width: e.data.width,
+      height: e.data.height,
+    };
 
-  $api.pen = e.data.pen;
-  // $api.updateMetronome = e.data.updateMetronome;
+    $api.pen = e.data.pen;
+    // $api.updateMetronome = e.data.updateMetronome;
 
-  // Update the number of times that are needed.
-  for (let i = e.data.updateCount; i--; ) {
-    update($api);
+    // Update the number of times that are needed.
+    for (let i = e.data.updateCount; i--; ) {
+      sim($api);
+    }
   }
 
+  // 3. Render
   if (e.data.needsRender) {
-    $api = {};
-
-    // Common API
+    const $api = {};
     Object.assign($api, $commonApi);
-    $api.penChanged = e.data.penChanged;
-
-    // Render
-    Object.assign($api, $renderApi);
+    Object.assign($api, $paintApi);
+    $api.paintCount = Number(paintCount);
 
     let pixels = new ImageData(
       new Uint8ClampedArray(e.data.pixels), // Is this the only necessary part?
@@ -141,79 +215,25 @@ function makeFrame(e) {
 
     graph.setBuffer(screen);
 
-    const renderResult = render($api);
-    let renderChanged;
-
-    if (renderResult === false) {
-      renderChanged = false;
-    } else {
-      renderChanged = true;
+    if (paintCount === 0n) {
+      boot($api);
     }
 
-    send({ pixels: e.data.pixels, renderChanged, loading }, [e.data.pixels]);
+    const paintResult = paint($api);
+    let paintChanged;
+
+    if (paintResult === false) {
+      paintChanged = false;
+    } else {
+      paintChanged = true;
+    }
+
+    send({ pixels: e.data.pixels, paintChanged, loading }, [e.data.pixels]);
+
+    paintCount = paintCount + 1n;
   } else {
     send({ pixels: e.data.pixels, didntRender: true, loading }, [
       e.data.pixels,
     ]);
-  }
-}
-
-let beat = () => false;
-let update = () => false;
-let render = () => false;
-
-let loadUrlCount = 1;
-let loadHost;
-
-async function load(path, host = loadHost) {
-  if (loading === false) {
-    loading = true;
-  } else {
-    // TODO: Implement some kind of loading screen system here?
-    console.warn("Already loading another disk:", path);
-    return;
-  }
-
-  console.log("💾 Loading:", path, "🌐 from:", host);
-
-  // The `loadUrlCount` query parameter busts the cache so changes can be seen if the disk code changes.
-  const fullUrl = "https://" + host + "/" + path + ".js?lc=" + loadUrlCount;
-  loadUrlCount += 1;
-
-  const module = await import(fullUrl);
-  loadHost = host;
-
-  beat = module.beat;
-  update = module.update;
-  render = module.render;
-
-  loading = false;
-}
-
-const isWorker = typeof importScripts === "function";
-export const noWorker = { onMessage: undefined, postMessage: undefined };
-
-// Start by responding to a load message, then change
-// the message response to makeFrame.
-if (isWorker) {
-  onmessage = async function (e) {
-    await load(e.data.path, e.data.host);
-    send({ loaded: true });
-    onmessage = makeFrame;
-  };
-} else {
-  noWorker.onMessage = async (e) => {
-    e = { data: e };
-    await load(e.data.path, e.data.host);
-    noWorker.onMessage = (d) => makeFrame({ data: d });
-    send({ loaded: true });
-  };
-}
-
-function send(data) {
-  if (isWorker) {
-    postMessage(data);
-  } else {
-    noWorker.postMessage({ data });
   }
 }

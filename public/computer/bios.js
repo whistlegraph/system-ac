@@ -55,7 +55,7 @@ function frame() {
 
   Graph.setBuffer(screen);
 
-  Graph.setColor(25, 25, 100);
+  Graph.color(25, 25, 100);
   Graph.clear(25, 25, 100);
   ctx.putImageData(imageData, 0, 0);
 
@@ -150,16 +150,7 @@ const pen = Pen.init(point);
 
 // 6. Define a blank starter disk that just renders noise and plays a tone.
 // TODO: Is this still necessary?
-let disk = {
-  beat: function beat($) {
-    console.log("Beat:", $);
-  },
-  update: function update() {},
-  render: function render($) {
-    const { noise16 } = $;
-    noise16();
-  },
-};
+const disk = {};
 
 // 💾 Boot the system and load a disk.
 async function boot(path = "index", bpm = 60, host = window.location.host) {
@@ -252,6 +243,7 @@ async function boot(path = "index", bpm = 60, host = window.location.host) {
     //console.log("Render Budget: ", Math.round((renderDelta / renderRate) * 100));
     // TODO: Output this number graphically.
 
+    // makeFrame
     send(
       {
         needsRender,
@@ -294,17 +286,17 @@ async function boot(path = "index", bpm = 60, host = window.location.host) {
 
     Graph.setBuffer(screen); // Why does screen exist here?
 
-    pixelsDidChange = e.data.renderChanged;
+    pixelsDidChange = e.data.paintChanged;
 
     if (pixelsDidChange || pen.changed) {
       frameCached = false;
-      Pen.render({ plot: Graph.plot, color: Graph.setColor });
+      Pen.render({ plot: Graph.plot, color: Graph.color });
       if (e.data.loading === true) renderLoadingSpinner();
       ctx.putImageData(imageData, 0, 0);
     } else if (frameCached === false) {
       frameCached = true;
       // Pause
-      Graph.setColor(0, 255, 255);
+      Graph.color(0, 255, 255);
       Graph.line(3, 3, 3, 9);
       Graph.line(6, 3, 6, 9);
       ctx.putImageData(imageData, 0, 0);
@@ -321,7 +313,7 @@ async function boot(path = "index", bpm = 60, host = window.location.host) {
 
 function renderLoadingSpinner() {
   // TODO: Send the tickCount or time in here?
-  Graph.setColor(255, 0, 0);
+  Graph.color(255, 0, 0);
   Graph.line(0, 0, 10, 10);
   Graph.line(0, 10, 10, 0);
 }

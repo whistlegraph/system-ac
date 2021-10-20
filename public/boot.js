@@ -4,7 +4,8 @@ const host = "127.0.0.1:8081";
 const bpm = 120;
 
 // For now there is no interactive boot menu, so we load a disk directly.
-boot("metronome-test", bpm, host);
+//boot("metronome-test", bpm, host);
+boot("3d", bpm, host);
 // boot("doodle", bpm, host);
 // boot("starfield", host);
 // load("blank", host);

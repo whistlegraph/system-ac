@@ -14,5 +14,8 @@
   "bugs": {
     "url": "https://github.com/whistlegraph/system/issues"
   },
-  "homepage": "https://github.com/whistlegraph/system#readme"
+  "homepage": "https://github.com/whistlegraph/system#readme",
+  "dependencies": {
+    "gl-matrix": "^3.4.3"
+  }
 }
