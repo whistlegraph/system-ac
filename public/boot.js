@@ -1,6 +1,6 @@
 import { boot } from "./computer/bios.js";
 const host = "disks.aesthetic.computer";
-//const host = "127.0.0.1:8081";
+// const host = "127.0.0.1:8081";
 const bpm = 120;
 
 // For now there is no interactive boot menu, so we load a disk directly.
