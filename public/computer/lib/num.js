@@ -34,10 +34,22 @@ export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-/*
-export function lerp(value1, value2, amount) {
-  amount = amount < 0 ? 0 : amount;
-  amount = amount > 1 ? 1 : amount;
-  return value1 + (value2 - value1) * amount;
+export function lerp(a, b, amount) {
+  return a + (b - a) * clamp(amount, 0, 1);
 }
- */
+
+export class Track {
+  #from;
+  #to;
+  #result;
+
+  constructor(from, to, result) {
+    this.#from = from;
+    this.#to = to;
+    this.#result = result;
+  }
+
+  step(progress) {
+    this.#result(lerp(this.#from, this.#to, progress));
+  }
+}

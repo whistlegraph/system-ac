@@ -6,6 +6,7 @@ let boot = () => false;
 let sim = () => false;
 let paint = ($) => $.noise16();
 let beat = () => false;
+// let query = ""; // Passing in original URL parameters.
 
 let loading = false;
 let paintCount = 0n;
@@ -15,7 +16,7 @@ const { load, send } = (() => {
   let loadUrlCount = 1;
   let loadHost;
 
-  async function load(path, host = loadHost) {
+  async function load(path, host = loadHost, search) {
     if (loading === false) {
       loading = true;
     } else {
@@ -40,6 +41,8 @@ const { load, send } = (() => {
       sim = module.sim;
       paint = module.paint;
       beat = module.beat;
+      //query = search;
+      $commonApi.query = search;
       loading = false;
     }, 250);
   }
@@ -51,14 +54,14 @@ const { load, send } = (() => {
   // the message response to makeFrame.
   if (isWorker) {
     onmessage = async function (e) {
-      await load(e.data.path, e.data.host);
+      await load(e.data.path, e.data.host, e.data.search);
       send({ loaded: true });
       onmessage = makeFrame;
     };
   } else {
     noWorker.onMessage = async (e) => {
       e = { data: e };
-      await load(e.data.path, e.data.host);
+      await load(e.data.path, e.data.host, e.data.search);
       noWorker.onMessage = (d) => makeFrame({ data: d });
       send({ loaded: true });
     };
@@ -84,12 +87,16 @@ const $commonApi = {
     randIntRange: num.randIntRange,
     dist: num.dist,
     radians: num.radians,
+    lerp: num.lerp,
+    Track: num.Track,
     vec4: num.vec4,
     vec3: num.vec3,
     mat4: num.mat4,
   },
   help: {
     choose: help.choose,
+    every: help.every,
+    each: help.each,
   },
 };
 
@@ -98,22 +105,52 @@ const $updateApi = {
   load,
 };
 
+// Pre-fab models:
+const SQUARE = {
+  positions: [
+    // Triangle 1 (Left Side)
+    [-1, -1, 0, 1], // Bottom Left
+    [-1, 1, 0, 1], // Top Left
+    [1, 1, 0, 1], // Top Right
+    // Triangle 2 (Right Side)
+    [-1, -1, 0, 1], // Bottom Left
+    [1, -1, 0, 1], // Bottom Right
+    [1, 1, 0, 1], // Top Right
+  ],
+  indices: [
+    // These are not re-used for now.
+    // One
+    0, 1, 2,
+    //Two
+    3, 4, 5,
+  ],
+};
+
+const TRIANGLE = {
+  positions: [
+    [-1, -1, 0, 1], // Bottom Left
+    [0, 1, 0, 1], // Top Left
+    [1, -1, 0, 1], // Top Right
+    // Triangle 2 (Right Side)
+  ],
+  indices: [0, 1, 2],
+};
+
 const $paintApi = {
   // Configuration
   color: graph.color,
+  buffer: graph.makeBuffer,
   // 2D
   clear: graph.clear,
   plot: graph.plot,
   line: graph.line,
+  box: graph.box,
   noise16: graph.noise16,
   // 3D
   Camera: graph.Camera,
   Form: graph.Form,
-  TRIANGLE: [
-    [0, 1, 0, 1],
-    [-1, -1, 0, 1],
-    [1, -1, 0, 1],
-  ],
+  TRIANGLE,
+  SQUARE,
 };
 
 function makeFrame(e) {
@@ -121,6 +158,7 @@ function makeFrame(e) {
   if (e.data.needsBeat) {
     const $api = {};
     Object.assign($api, $commonApi);
+    $api.graph = $paintApi; // TODO: Should this eventually be removed?
 
     $api.sound = {
       time: e.data.time,
@@ -214,6 +252,12 @@ function makeFrame(e) {
     $api.pen = e.data.pen;
 
     graph.setBuffer(screen);
+
+    // Clear depthBuffer. TODO: This should only be for 3D?
+    graph.depthBuffer.length = screen.width * screen.height;
+    for (let i = 0; i < graph.depthBuffer.length; i += 1) {
+      graph.depthBuffer[i] = Number.MAX_VALUE;
+    }
 
     if (paintCount === 0n) {
       boot($api);

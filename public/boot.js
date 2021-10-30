@@ -5,7 +5,7 @@ const bpm = 120;
 
 // For now there is no interactive boot menu, so we load a disk directly.
 //boot("metronome-test", bpm, host);
-boot("3d", bpm, host);
+boot("stage", bpm, host, new URL(self.location).search);
 // boot("doodle", bpm, host);
 // boot("starfield", host);
 // load("blank", host);

@@ -9,12 +9,40 @@ import {
 } from "./num.js";
 
 let width, height, pixels;
+const depthBuffer = [];
 const c = [255, 255, 255, 255];
 
 // 1. Configuration & State
 
-function setBuffer(screen) {
-  ({ width, height, pixels } = screen);
+function makeBuffer(width, height, fillProcess) {
+  const imageData = new ImageData(width, height);
+
+  const buffer = {
+    pixels: imageData.data,
+    width: imageData.width,
+    height: imageData.height,
+  };
+
+  if (typeof fillProcess === "function") {
+    // Remember the current buffer and color.
+    const savedBuffer = getBuffer();
+    const storedColor = c;
+    setBuffer(buffer);
+    fillProcess(width, height);
+    // Restore old buffer and color.
+    setBuffer(savedBuffer);
+    color(...storedColor);
+  }
+
+  return buffer;
+}
+
+function getBuffer() {
+  return { width, height, pixels };
+}
+
+function setBuffer(buffer) {
+  ({ width, height, pixels } = buffer);
 }
 
 function color(r, g, b, a = 255) {
@@ -24,7 +52,7 @@ function color(r, g, b, a = 255) {
   c[3] = a;
 }
 
-export { setBuffer, color };
+export { makeBuffer, setBuffer, depthBuffer, color };
 
 // 2. 2D Drawing
 
@@ -64,6 +92,38 @@ function plot(x, y) {
   pixels[i + 3] = c[3];
 }
 
+function copy(destX, destY, srcX, srcY, src, alpha) {
+  destX = Math.round(destX);
+  destY = Math.round(destY);
+  srcX = Math.round(srcX);
+  srcY = Math.round(srcY);
+
+  // Skip pixels that are offscreen.
+  // TODO: Is this necessary? How slow is it?
+  if (
+    destX < 0 ||
+    destX >= width ||
+    destY < 0 ||
+    destY >= height ||
+    srcX < 0 ||
+    srcX >= src.width ||
+    srcY < 0 ||
+    srcY >= src.height
+  ) {
+    return;
+  }
+
+  const destIndex = (destX + destY * width) * 4;
+  const srcIndex = (srcX + srcY * src.width) * 4;
+
+  // console.log(destIndex, srcIndex);
+
+  pixels[destIndex] = src.pixels[srcIndex] * alpha;
+  pixels[destIndex + 1] = src.pixels[srcIndex + 1] * alpha;
+  pixels[destIndex + 2] = src.pixels[srcIndex + 2] * alpha;
+  pixels[destIndex + 3] = src.pixels[srcIndex + 3];
+}
+
 function line(x0, y0, x1, y1) {
   // Make sure everything is ceil'd.
   x0 = Math.round(x0);
@@ -94,6 +154,12 @@ function line(x0, y0, x1, y1) {
   }
 }
 
+function box(x, y, width, height) {
+  for (let i = 0; i < height; i += 1) {
+    line(x, y + i, x + width, y + i);
+  }
+}
+
 function noise16() {
   for (let i = 0; i < pixels.length; i += 4) {
     pixels[i] = byteInterval17(randInt(16)); // r
@@ -103,7 +169,7 @@ function noise16() {
   }
 }
 
-export { clear, plot, line, noise16 };
+export { clear, plot, line, box, noise16 };
 
 // 3. 3D Drawing (Kinda mixed with some 2D)
 
@@ -120,7 +186,7 @@ class Camera {
   matrix;
   x = 0;
   y = 0;
-  z = 0;
+  #z = 0;
 
   #perspectiveMatrix;
   #transformMatrix;
@@ -132,8 +198,18 @@ class Camera {
     this.matrix = this.#transformMatrix;
   }
 
+  set z(n) {
+    this.#z = n;
+    this.#transform();
+    this.matrix = this.#transformMatrix;
+  }
+
+  get z() {
+    return this.#z;
+  }
+
   forward(n) {
-    this.z -= n;
+    this.#z -= n;
     this.#transform();
     this.matrix = this.#transformMatrix;
   }
@@ -166,7 +242,7 @@ class Camera {
     this.#transformMatrix = mat4.translate(
       mat4.create(),
       this.#perspectiveMatrix,
-      [this.x, this.y, this.z]
+      [this.x, this.y, this.#z]
     );
 
     // Camera rotate:
@@ -174,39 +250,84 @@ class Camera {
   }
 }
 
+// Mesh
 class Form {
+  #primitive = "triangle";
+
+  // Model
   vertices = [];
+  indices;
+
+  // TODO: Texture and color should be optional, and perhaps based on type.
+  // TODO: Should this use a parameter called shader?
+  texture; // = makeBuffer(32, 32);
+
+  #gradientColors = [
+    [1.0, 0.0, 0.0, 1.0],
+    [0.0, 1.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0, 1.0],
+  ];
+
+  #texCoords = [
+    [0.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [1.0, 1.0, 0.0, 0.0],
+  ];
+
+  // Transform
   position = [0, 0, 0];
   rotation = [0, 0, 0];
   scale = [1, 1, 1];
 
-  #type = "triangle";
+  // Blending
+  alpha = 1.0;
 
   constructor(
-    vertices,
+    // Model
+    { positions, indices },
+    fill,
+    // Transform
     position = [0, 0, 0],
-    rotation = [0, 0, 0]
-    //scale = [1, 1, 1]
+    rotation = [0, 0, 0],
+    scale = [1, 1, 1]
   ) {
-    // Create new vertices with an added 'w' component.
-    for (let i = 0; i < vertices.length; i++) {
-      this.vertices.push(new Vertex(vertices[i], c));
+    // 1. Import a Model
+
+    // Create new vertices from incoming positions.
+    for (let i = 0; i < positions.length; i++) {
+      // Generate texCoord from position instead of loading.
+      // (Vertex / 2) + 0.5 // Vertex to UV
+      // See also: (Vertex - 0.5) * 2 // UV to Vertex
+      // TODO: This only works for quads right now.
+      const texCoord = [
+        positions[i][X] / 2 + 0.5,
+        positions[i][Y] / 2 + 0.5,
+        0, //positions[i][Z] / 2 + 0.5, // TODO: Is this necessary to calculate for UV?
+        0,
+      ];
+
+      this.vertices.push(
+        new Vertex(
+          positions[i],
+          this.#gradientColors[i % 3],
+          texCoord //this.#texCoords[i % 3]
+        )
+      );
     }
 
-    // TODO: Set this.#type here.
-    // - 1 Vertex would render a point or sphere.
-    // - 2 Verticies would render a line with a thickness.
-    // - 3 or more vertices would render a triangle or lines or a fan.
+    // Create indices from pre-indexed positions.
+    this.indices = indices;
+
+    // Assign texture or color.
+    if (fill.texture) {
+      this.texture = fill.texture;
+    }
+
+    // TODO: Set this.#type here from type.
 
     this.position = position;
     this.rotation = rotation;
-    //this.scale = scale;
-  }
-
-  angle(x, y, z) {
-    this.rotation[X] = x;
-    this.rotation[Y] = y;
-    this.rotation[Z] = z;
+    this.scale = scale;
   }
 
   graph({ matrix: cameraMatrix }) {
@@ -222,6 +343,7 @@ class Form {
       mat4.create(),
       radians(this.rotation[X])
     );
+
     const rotateZ = mat4.fromZRotation(
       mat4.create(),
       radians(this.rotation[Z])
@@ -230,9 +352,11 @@ class Form {
     const rotate = mat4.mul(mat4.create(), rotateY, rotateX);
     mat4.mul(rotate, rotate, rotateZ);
 
-    //const rotate = rotateY;
-
+    // Apply translation and rotation.
     const matrix = mat4.mul(mat4.create(), translate, rotate);
+
+    // Apply scale.
+    mat4.scale(matrix, matrix, this.scale);
 
     // Apply the camera matrix.
     mat4.mul(matrix, cameraMatrix, matrix);
@@ -244,15 +368,47 @@ class Form {
       transformedVertices.push(vertex.transform(matrix));
     });
 
-    // Draw a triangle (with clipping) and apply the screen transform &
-    // perspective divide.
-    drawTriangle(...transformedVertices);
+    // TODO: Switch on render type here. Right now it's only triangles.
+
+    // Loop indices list to draw each triangle.
+    for (let i = 0; i < this.indices.length; i += 3) {
+      // Draw each triangle by applying the screen transform &
+      // perspective divide (with clipping).
+      // console.log("TRIANGLE", i);
+      drawTriangle(
+        transformedVertices[i],
+        transformedVertices[i + 1],
+        transformedVertices[i + 2],
+        // Eventually pass in a "shader" function instead of texture or alpha..
+        this.texture,
+        this.alpha
+      );
+    }
+  }
+
+  angle(x, y, z) {
+    this.rotation[X] = x;
+    this.rotation[Y] = y;
+    this.rotation[Z] = z;
   }
 }
+
+/*
+class Model {
+  positions;
+  texCoords;
+
+  constructor(positions, texCoords) {
+    this.positions = positions;
+    this.texCoords = texCoords;
+  }
+}
+*/
 
 class Vertex {
   pos; // vec4
   color; // vec4
+  texCoords; // vec4
 
   get x() {
     return this.pos[X];
@@ -262,16 +418,28 @@ class Vertex {
     return this.pos[Y];
   }
 
-  constructor(pos = [0, 0, 0, 1], color = [...c, 1.0]) {
-    // TODO: Alpha
+  get color24bit() {
+    // 0-255
+    return this.color.map((c) => Math.floor(c * 255));
+  }
+
+  constructor(
+    pos = [0, 0, 0, 1],
+    color = [...c, 1.0],
+    texCoords = [0, 0, 0, 0]
+  ) {
     this.pos = vec4.fromValues(...pos);
     this.color = vec4.fromValues(...color);
+    // if (Array.isArray(texCoords)) {
+    this.texCoords = vec4.fromValues(...texCoords);
+    // }
   }
 
   transform(matrix) {
     return new Vertex(
       vec4.transformMat4(vec4.create(), this.pos, matrix),
-      this.color
+      this.color,
+      this.texCoords
     );
   }
 
@@ -283,7 +451,8 @@ class Vertex {
         this.pos[Z] / this.pos[W],
         this.pos[W]
       ),
-      this.color
+      this.color,
+      this.texCoords
     );
   }
 }
@@ -291,7 +460,7 @@ class Vertex {
 function initScreenSpaceTransformMatrix(halfWidth, halfHeight) {
   const m = mat4.create();
   mat4.translate(m, m, [halfWidth - 0.5, halfHeight - 0.5, 0]);
-  mat4.scale(m, m, [halfWidth, -halfHeight, 0]);
+  mat4.scale(m, m, [halfWidth, -halfHeight, 1]);
   return m;
 }
 
@@ -310,6 +479,20 @@ class Edge {
   #yStart;
   #yEnd;
 
+  color;
+  #colorStep;
+
+  texCoordX;
+  #texCoordXStep;
+  texCoordY;
+  #texCoordYStep;
+
+  oneOverZ;
+  #oneOverZStep;
+
+  depth;
+  #depthStep;
+
   get x() {
     return this.#x;
   }
@@ -324,7 +507,7 @@ class Edge {
 
   #xStep;
 
-  constructor(minYVert, maxYVert) {
+  constructor(gradients, minYVert, maxYVert, minYVertIndex) {
     this.#yStart = Math.ceil(minYVert.y);
     this.#yEnd = Math.ceil(maxYVert.y);
 
@@ -335,24 +518,269 @@ class Edge {
 
     this.#xStep = xDist / yDist;
     this.#x = minYVert.x + yPrestep * this.#xStep;
+
+    const xPrestep = this.#x - minYVert.x;
+
+    // Texture
+
+    this.texCoordX =
+      gradients.texCoordX[minYVertIndex] +
+      gradients.texCoordXXStep * xPrestep +
+      gradients.texCoordXYStep * yPrestep;
+
+    this.#texCoordXStep =
+      gradients.texCoordXYStep + gradients.texCoordXXStep * this.#xStep;
+
+    this.texCoordY =
+      gradients.texCoordY[minYVertIndex] +
+      gradients.texCoordYXStep * xPrestep +
+      gradients.texCoordYYStep * yPrestep;
+
+    this.#texCoordYStep =
+      gradients.texCoordYYStep + gradients.texCoordYXStep * this.#xStep;
+
+    this.oneOverZ =
+      gradients.oneOverZ[minYVertIndex] +
+      gradients.oneOverZXStep * xPrestep +
+      gradients.oneOverZYStep * yPrestep;
+
+    this.#oneOverZStep =
+      gradients.oneOverZYStep + gradients.oneOverZXStep * this.#xStep;
+
+    this.depth =
+      gradients.depth[minYVertIndex] +
+      gradients.depthXStep * xPrestep +
+      gradients.depthYStep * yPrestep;
+
+    this.#depthStep = gradients.depthYStep + gradients.depthXStep * this.#xStep;
+
+    // Color
+    {
+      const vec = gradients.color[minYVertIndex].slice();
+      vec4.add(
+        vec,
+        vec,
+        vec4.scale(vec4.create(), gradients.colorYStep, yPrestep)
+      );
+      vec4.add(
+        vec,
+        vec,
+        vec4.scale(vec4.create(), gradients.colorXStep, xPrestep)
+      );
+      this.color = vec;
+    }
+
+    {
+      const vec = gradients.colorYStep.slice();
+      const scaled = vec4.scale(
+        vec4.create(),
+        gradients.colorXStep,
+        this.#xStep
+      );
+      vec4.add(vec, vec, scaled);
+      this.#colorStep = vec;
+    }
   }
 
   step() {
-    this.#x += this.#xStep;
-    // this.#color += this.#colorStep
-    // this.#lighting += this.#lightingStep
+    this.#x += this.#xStep; // add xStep
+
+    vec4.add(this.color, this.color, this.#colorStep); // add colorStep
+
+    this.texCoordX += this.#texCoordXStep;
+    this.texCoordY += this.#texCoordYStep;
+    this.oneOverZ += this.#oneOverZStep;
+    this.depth += this.#depthStep;
+
+    // this.#lighting += this.#lightingStep // TODO: Add lighting.
+  }
+}
+
+class Gradients {
+  // See also: https://github.com/BennyQBD/3DSoftwareRenderer/blob/8f196cd3d9811c47638d102e08988162afffc04e/src/Gradients.java.
+  // https://youtu.be/4sSL0kGMjMQ?t=1016
+
+  oneOverZ;
+  texCoordX;
+  texCoordY;
+  depth;
+
+  texCoordXXStep;
+  texCoordXYStep;
+  texCoordYXStep;
+  texCoordYYStep;
+
+  oneOverZXStep;
+  oneOverZYStep;
+
+  depthXStep;
+  depthYStep;
+
+  color;
+  colorYStep;
+  colorXStep;
+
+  constructor(minYVert, midYVert, maxYVert) {
+    this.color = [minYVert.color, midYVert.color, maxYVert.color];
+
+    const oneOverdX =
+      1 /
+      ((midYVert.x - maxYVert.x) * (minYVert.y - maxYVert.y) -
+        (minYVert.x - maxYVert.x) * (midYVert.y - maxYVert.y));
+
+    const oneOverdY = -oneOverdX;
+
+    // Texture
+
+    this.oneOverZ = [
+      1 / minYVert.pos[W],
+      1 / midYVert.pos[W],
+      1 / maxYVert.pos[W],
+    ];
+
+    this.texCoordX = [
+      minYVert.texCoords[X] * this.oneOverZ[0],
+      midYVert.texCoords[X] * this.oneOverZ[1],
+      maxYVert.texCoords[X] * this.oneOverZ[2],
+    ];
+
+    this.texCoordY = [
+      minYVert.texCoords[Y] * this.oneOverZ[0],
+      midYVert.texCoords[Y] * this.oneOverZ[1],
+      maxYVert.texCoords[Y] * this.oneOverZ[2],
+    ];
+
+    this.depth = [minYVert.pos[Z], midYVert.pos[Z], maxYVert.pos[Z]];
+
+    // Note that the W component is the perspective Z value;
+    // The Z component is the occlusion Z value
+    this.texCoordXXStep = this.#calcXStep(
+      this.texCoordX,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdX
+    );
+
+    this.texCoordXYStep = this.#calcYStep(
+      this.texCoordX,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdY
+    );
+
+    this.texCoordYXStep = this.#calcXStep(
+      this.texCoordY,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdX
+    );
+
+    this.texCoordYYStep = this.#calcYStep(
+      this.texCoordY,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdY
+    );
+
+    this.oneOverZXStep = this.#calcXStep(
+      this.oneOverZ,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdX
+    );
+
+    this.oneOverZYStep = this.#calcYStep(
+      this.oneOverZ,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdY
+    );
+
+    this.depthXStep = this.#calcXStep(
+      this.depth,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdX
+    );
+
+    this.depthYStep = this.#calcYStep(
+      this.depth,
+      minYVert,
+      midYVert,
+      maxYVert,
+      oneOverdY
+    );
+
+    // Color
+
+    // (c1 - c2) * (y0 - y2) - (c0 - c2) * (y1 - y2)
+    // a           b           c           d
+    {
+      const a = vec4.sub(vec4.create(), this.color[1], this.color[2]);
+      const b = minYVert.y - maxYVert.y;
+
+      const c = vec4.sub(vec4.create(), this.color[0], this.color[2]);
+      const d = midYVert.y - maxYVert.y;
+
+      const left = vec4.scale(vec4.create(), a, b);
+      const right = vec4.scale(vec4.create(), c, d);
+
+      const sub = vec4.sub(vec4.create(), left, right);
+
+      this.colorXStep = vec4.scale(vec4.create(), sub, oneOverdX);
+    }
+
+    // (c1 - c2) * (x0 - x2) - (c0 - c2) * (x1 - x2)
+    // a           b           c           d
+    {
+      const a = vec4.sub(vec4.create(), this.color[1], this.color[2]);
+      const b = minYVert.x - maxYVert.x;
+
+      const c = vec4.sub(vec4.create(), this.color[0], this.color[2]);
+      const d = midYVert.x - maxYVert.x;
+
+      const left = vec4.scale(vec4.create(), a, b);
+      const right = vec4.scale(vec4.create(), c, d);
+
+      const sub = vec4.sub(vec4.create(), left, right);
+
+      this.colorYStep = vec4.scale(vec4.create(), sub, oneOverdY);
+    }
+  }
+
+  #calcXStep(values, minYVert, midYVert, maxYVert, oneOverdX) {
+    return (
+      ((values[1] - values[2]) * (minYVert.y - maxYVert.y) -
+        (values[0] - values[2]) * (midYVert.y - maxYVert.y)) *
+      oneOverdX
+    );
+  }
+
+  #calcYStep(values, minYVert, midYVert, maxYVert, oneOverdY) {
+    return (
+      ((values[1] - values[2]) * (minYVert.x - maxYVert.x) -
+        (values[0] - values[2]) * (midYVert.x - maxYVert.x)) *
+      oneOverdY
+    );
   }
 }
 
 // d. Triangle Rendering
 
-function drawTriangle(v1, v2, v3) {
+function drawTriangle(v1, v2, v3, texture, alpha) {
   if (
     isInsideViewFrustum(v1.pos) &&
     isInsideViewFrustum(v2.pos) &&
     isInsideViewFrustum(v3.pos)
   ) {
-    fillTriangle(v1, v2, v3);
+    fillTriangle(v1, v2, v3, texture, alpha);
     return;
   }
 
@@ -369,12 +797,12 @@ function drawTriangle(v1, v2, v3) {
   ) {
     const initialVertex = vertices[0];
     for (let i = 1; i < vertices.length - 1; i += 1) {
-      fillTriangle(initialVertex, vertices[i], vertices[i + 1]);
+      fillTriangle(initialVertex, vertices[i], vertices[i + 1], texture, alpha);
     }
   }
 }
 
-function fillTriangle(minYVert, midYVert, maxYVert) {
+function fillTriangle(minYVert, midYVert, maxYVert, texture, alpha) {
   const screenMatrix = initScreenSpaceTransformMatrix(
     width / 2,
     height / 2,
@@ -384,6 +812,16 @@ function fillTriangle(minYVert, midYVert, maxYVert) {
   minYVert = minYVert.transform(screenMatrix).perspectiveDivide();
   midYVert = midYVert.transform(screenMatrix).perspectiveDivide();
   maxYVert = maxYVert.transform(screenMatrix).perspectiveDivide();
+
+  // Backface culling by checking if Z normal is negative.
+
+  // TODO: Add normal to vertex (for basic lighting) here?
+
+  /*
+  if (triangleAreaDouble(minYVert, maxYVert, midYVert) >= 0) {
+    return;
+  }
+   */
 
   if (maxYVert.y < midYVert.y) {
     const temp = maxYVert;
@@ -405,22 +843,30 @@ function fillTriangle(minYVert, midYVert, maxYVert) {
 
   const handedness = triangleAreaDouble(minYVert, maxYVert, midYVert) >= 0;
 
-  scanTriangle(minYVert, midYVert, maxYVert, handedness);
+  scanTriangle(minYVert, midYVert, maxYVert, handedness, texture, alpha);
 
-  let tempColor = c.slice();
+  // Debug / Wireframes
+  // TODO: How to accurately outline a triangle?
+  // in drawScanLine: Add border at xMin and xMax and also use j to know if we are at the bottom.
 
-  // Wireframes
-  color(0, 0, 255);
+  const tempColor = c.slice();
+  color(127, 127, 127);
+  /*
   line(minYVert.x, minYVert.y, midYVert.x, midYVert.y);
   line(midYVert.x, midYVert.y, maxYVert.x, maxYVert.y);
   line(minYVert.x, minYVert.y, maxYVert.x, maxYVert.y);
-
-  color(0, 255, 0);
-  plot(minYVert.x, minYVert.y);
-  plot(midYVert.x, midYVert.y);
-  plot(maxYVert.x, maxYVert.y);
-
   color(...tempColor);
+  */
+  /*
+  color(...minYVert.color24bit);
+  plot(minYVert.x, minYVert.y);
+
+  color(...midYVert.color24bit);
+  plot(midYVert.x, midYVert.y);
+
+  color(...maxYVert.color24bit);
+  plot(maxYVert.x, maxYVert.y);
+  */
 }
 
 function triangleAreaDouble(a, b, c) {
@@ -431,119 +877,145 @@ function triangleAreaDouble(a, b, c) {
   return x1 * y2 - x2 * y1;
 }
 
-function scanTriangle(minYVert, midYVert, maxYVert, handedness) {
-  const topToBottom = new Edge(minYVert, maxYVert);
-  const topToMiddle = new Edge(minYVert, midYVert);
-  const middleToBottom = new Edge(midYVert, maxYVert);
+function scanTriangle(
+  minYVert,
+  midYVert,
+  maxYVert,
+  handedness,
+  texture,
+  alpha
+) {
+  const gradients = new Gradients(minYVert, midYVert, maxYVert);
 
-  {
-    let left = topToBottom;
-    let right = topToMiddle;
-    if (handedness) {
-      let temp = left;
-      left = right;
-      right = temp;
-    }
+  const topToBottom = new Edge(gradients, minYVert, maxYVert, 0);
+  const topToMiddle = new Edge(gradients, minYVert, midYVert, 0);
+  const middleToBottom = new Edge(gradients, midYVert, maxYVert, 1);
 
-    const yStart = topToMiddle.yStart;
-    const yEnd = topToMiddle.yEnd;
+  scanEdges(gradients, topToBottom, topToMiddle, handedness, texture, alpha);
+  scanEdges(gradients, topToBottom, middleToBottom, handedness, texture, alpha);
+}
 
-    for (let i = yStart; i < yEnd; i += 1) {
-      drawScanLine(left, right, i);
-      left.step();
-      right.step();
-    }
+function scanEdges(gradients, a, b, handedness, texture, alpha) {
+  let left = a;
+  let right = b;
+  if (handedness) {
+    let temp = left;
+    left = right;
+    right = temp;
   }
 
-  {
-    let left = topToBottom;
-    let right = middleToBottom;
-    if (handedness) {
-      let temp = left;
-      left = right;
-      right = temp;
-    }
+  const yStart = b.yStart;
+  const yEnd = b.yEnd;
 
-    const yStart = middleToBottom.yStart;
-    const yEnd = middleToBottom.yEnd;
-
-    for (let i = yStart; i < yEnd; i += 1) {
-      drawScanLine(left, right, i);
-      left.step();
-      right.step();
-    }
+  for (let i = yStart; i < yEnd; i += 1) {
+    drawScanLine(gradients, left, right, i, texture, alpha);
+    left.step();
+    right.step();
   }
 }
 
-function drawScanLine(left, right, j) {
-  // Clipping
-
-  function clipPolygonAxis(vertices, auxillaryList, componentIndex) {
-    clipPolygonComponent(vertices, componentIndex, 1.0, auxillaryList);
-    vertices.length = 0;
-
-    if (auxillaryList.length === 0) {
-      return false;
-    }
-
-    clipPolygonComponent(auxillaryList, componentIndex, -1.0, vertices);
-    auxillaryList.length = 0;
-
-    return !(vertices.length === 0);
-  }
-
-  function clipPolygonComponent(
-    vertices,
-    componentIndex,
-    componentFactor,
-    result
-  ) {
-    let prevVertex = vertices[vertices.length - 1];
-    let prevComponent = prevVertex[componentIndex] * componentFactor;
-    let prevInside = prevComponent <= prevVertex[W];
-
-    for (let i = 0; i < vertices.length; i += 1) {
-      const curVertex = vertices[i];
-      const curComponent = curVertex[componentIndex] * componentFactor;
-
-      const curInside = curComponent <= curVertex[W];
-
-      if (curInside ? !prevInside : prevInside) {
-        const lerpAmount =
-          (prevVertex[W] - prevComponent) /
-          (prevVertex[W] - prevComponent - (curVertex[W] - curComponent));
-        result.push(
-          vec4.lerp(vec4.create(), prevVertex, curVertex, lerpAmount)
-        );
-      }
-
-      if (curInside) {
-        result.push(curVertex);
-      }
-
-      prevVertex = curVertex;
-      prevComponent = curComponent;
-      prevInside = curInside;
-    }
-  }
-
-  const startColor = [...c];
-
+function drawScanLine(gradients, left, right, j, texture, alpha) {
   const xMin = Math.ceil(left.x);
   const xMax = Math.ceil(right.x);
 
+  const xPrestep = xMin - left.x;
+
+  // Texture
+
+  const xDist = right.x - left.x;
+  const texCoordXXStep = (right.texCoordX - left.texCoordX) / xDist;
+  const texCoordYXStep = (right.texCoordY - left.texCoordY) / xDist;
+  const oneOverZXStep = (right.oneOverZ - left.oneOverZ) / xDist;
+
+  const depthXStep = (right.depth - left.depth) / xDist;
+
+  let texCoordX = left.texCoordX + texCoordXXStep * xPrestep;
+  let texCoordY = left.texCoordY + texCoordYXStep * xPrestep;
+  let oneOverZ = left.oneOverZ + oneOverZXStep * xPrestep;
+  let depth = left.depth + depthXStep * xPrestep;
+
+  // Color
+  const gradientColor = vec4.add(
+    vec4.create(),
+    left.color,
+    vec4.scale(vec4.create(), gradients.colorXStep, xPrestep)
+  );
+
   for (let i = xMin; i < xMax; i += 1) {
-    // TODO: Why can't I properly edit the pixels here?
+    const index = i + j * width;
 
-    color(
-      clamp(startColor[0] + randIntRange(-15, 15), 0, 255),
-      clamp(startColor[1] + randIntRange(-15, 15), 0, 255),
-      clamp(startColor[2] + randIntRange(-15, 15), 0, 255)
-    );
+    if (depth < depthBuffer[index]) {
+      depthBuffer[index] = depth;
 
-    //color(randInt(255), randInt(255), randInt(255));
+      // TODO: Add color and fog.
+      // const stretchedDepth = 1 - (depth - 0.9) * 10;
+      // console.log(stretchedDepth);
+      // const r = Math.floor(gradientColor[X] * 255 + 0.5);
+      // const g = Math.floor(gradientColor[Y] * 255 + 0.5);
+      // const b = Math.floor(gradientColor[Z] * 255 + 0.5);
+      // color(255 * stretchedDepth, 255 * stretchedDepth, 255 * stretchedDepth);
+      // plot(i, j);
 
-    plot(i, j);
+      const z = 1 / oneOverZ;
+
+      const srcX = texCoordX * z * (texture.width - 1) + 0.5;
+      const srcY = texCoordY * z * (texture.height - 1) + 0.5;
+
+      copy(i, j, srcX, srcY, texture, alpha); // TODO: Eventually remove alpha from here.
+    }
+
+    vec4.add(gradientColor, gradientColor, gradients.colorXStep);
+    texCoordX += texCoordXXStep;
+    texCoordY += texCoordYXStep;
+    oneOverZ += oneOverZXStep;
+    depth += depthXStep;
+  }
+}
+
+function clipPolygonAxis(vertices, auxillaryList, componentIndex) {
+  clipPolygonComponent(vertices, componentIndex, 1.0, auxillaryList);
+  vertices.length = 0;
+
+  if (auxillaryList.length === 0) {
+    return false;
+  }
+
+  clipPolygonComponent(auxillaryList, componentIndex, -1.0, vertices);
+  auxillaryList.length = 0;
+
+  return !(vertices.length === 0);
+}
+
+function clipPolygonComponent(
+  vertices,
+  componentIndex,
+  componentFactor,
+  result
+) {
+  let prevVertex = vertices[vertices.length - 1];
+  let prevComponent = prevVertex[componentIndex] * componentFactor;
+  let prevInside = prevComponent <= prevVertex[W];
+
+  for (let i = 0; i < vertices.length; i += 1) {
+    const curVertex = vertices[i];
+    const curComponent = curVertex[componentIndex] * componentFactor;
+
+    const curInside = curComponent <= curVertex[W];
+
+    if (curInside ? !prevInside : prevInside) {
+      const lerpAmount =
+        (prevVertex[W] - prevComponent) /
+        (prevVertex[W] - prevComponent - (curVertex[W] - curComponent));
+      result.push(vec4.lerp(vec4.create(), prevVertex, curVertex, lerpAmount));
+    }
+
+    if (curInside) {
+      result.push(curVertex);
+    }
+
+    prevVertex = curVertex;
+    prevComponent = curComponent;
+    prevInside = curInside;
   }
 }
 

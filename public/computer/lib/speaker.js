@@ -67,6 +67,7 @@ class SoundProcessor extends AudioWorkletProcessor {
           )
         );
 
+        /*
         console.log(
           "🎼 Square:",
           msg.data.tone,
@@ -81,6 +82,7 @@ class SoundProcessor extends AudioWorkletProcessor {
           "Pan:",
           msg.data.pan
         );
+        */
       }
 
       // Sample

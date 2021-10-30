@@ -153,7 +153,12 @@ const pen = Pen.init(point);
 const disk = {};
 
 // 💾 Boot the system and load a disk.
-async function boot(path = "index", bpm = 60, host = window.location.host) {
+async function boot(
+  path = "index",
+  bpm = 60,
+  host = window.location.host,
+  search = ""
+) {
   // Try to load the disk as a worker first.
   // Safari and FF support is coming for worker module imports: https://bugs.webkit.org/show_bug.cgi?id=164860
   const worker = new Worker("./computer/lib/disk.js", { type: "module" });
@@ -168,7 +173,7 @@ async function boot(path = "index", bpm = 60, host = window.location.host) {
     const module = await import("./lib/disk.js");
     module.noWorker.postMessage = (e) => onMessage(e); // Define the disk's postMessage replacement.
     send = (e) => module.noWorker.onMessage(e); // Hook up our post method to disk's onmessage replacement.
-    send({ path, host });
+    send({ path, host, search });
   };
 
   function loaded(e) {
@@ -181,7 +186,7 @@ async function boot(path = "index", bpm = 60, host = window.location.host) {
   }
 
   // The initial message sends the path and host to load the disk.
-  send({ path, host });
+  send({ path, host, search });
 
   // Beat
 
