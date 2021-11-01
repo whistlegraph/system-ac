@@ -3,6 +3,8 @@ const host = "disks.aesthetic.computer";
 // const host = "127.0.0.1:8081";
 const bpm = 120;
 
+// TODO: Make my first generative disk / piece.
+
 // For now there is no interactive boot menu, so we load a disk directly.
 //boot("metronome-test", bpm, host);
 boot("stage", bpm, host, new URL(self.location).search);
