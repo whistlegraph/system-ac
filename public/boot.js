@@ -6,8 +6,13 @@ const bpm = 120;
 // TODO: Make my first generative disk / piece.
 
 // For now there is no interactive boot menu, so we load a disk directly.
-//boot("metronome-test", bpm, host);
-boot("stage", bpm, host, new URL(self.location).search);
+if (window.location.hash === "#pull") {
+  boot("pull", bpm, host);
+} else {
+  boot("stage", bpm, host, new URL(self.location).search);
+}
+
+// boot("metronome-test", bpm, host);
 // boot("doodle", bpm, host);
 // boot("starfield", host);
 // load("blank", host);

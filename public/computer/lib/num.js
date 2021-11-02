@@ -26,18 +26,22 @@ export function dist(x1, y1, x2, y2) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+// Converts degrees to radians.
 export function radians(deg) {
   return deg * (Math.PI / 180);
 }
 
+// Keeps a value between min and max.
 export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+// Slides a number between a and by a normalized amount.
 export function lerp(a, b, amount) {
   return a + (b - a) * clamp(amount, 0, 1);
 }
 
+// Wraps a single lerped value into a class.
 export class Track {
   #from;
   #to;
@@ -52,4 +56,19 @@ export class Track {
   step(progress) {
     this.#result(lerp(this.#from, this.#to, progress));
   }
+}
+
+// Adjusts a box so that x, y is always the top left.
+export function boxNormal(x, y, w, h) {
+  if (w < 0) {
+    x += w;
+    w = Math.abs(w);
+  }
+
+  if (h < 0) {
+    y += h;
+    h = Math.abs(h);
+  }
+
+  return { x, y, w, h };
 }

@@ -7,15 +7,17 @@ const pen = {
   x: undefined,
   y: undefined,
   down: false,
-  changed: false
+  changed: false,
 };
 
+let usingTouch = false;
 let penCursor = false;
 let lastPenX, lastPenY, lastPenDown, lastPenCursor;
 
 export function init(point) {
   // Prevent touch events from scrolling the page.
   function absorbEvent(e) {
+    usingTouch = true;
     e.stopPropagation();
     e.preventDefault();
     e.returnValue = false;
@@ -28,18 +30,18 @@ export function init(point) {
 
   // Add pointer events.
 
-  window.addEventListener("pointermove", function(e) {
+  window.addEventListener("pointermove", function (e) {
     Object.assign(pen, point(e.x, e.y));
     penCursor = true;
   });
 
-  window.addEventListener("pointerdown", function(e) {
+  window.addEventListener("pointerdown", function (e) {
     Object.assign(pen, point(e.x, e.y));
     pen.down = true;
     penCursor = true;
   });
 
-  window.addEventListener("pointerup", function(e) {
+  window.addEventListener("pointerup", function (e) {
     pen.down = false;
 
     if (e.pointerType === "touch") {
@@ -62,14 +64,14 @@ export function input() {
     lastPenDown = pen.down;
     lastPenX = pen.x;
     lastPenY = pen.y;
-  } 
+  }
   // Wait until after rendering to set changed to false, because other render functions may check it.
 }
 
 export function render($) {
   const { plot, color } = $;
 
-  if (penCursor) {
+  if (penCursor && !usingTouch) {
     color(255, 255, 255);
 
     // Center
@@ -91,6 +93,6 @@ export function render($) {
     plot(pen.x + 2, pen.y);
     plot(pen.x + 3, pen.y);
   }
-  
+
   pen.changed = false;
 }

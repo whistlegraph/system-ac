@@ -1,6 +1,7 @@
 import * as graph from "./graph.js";
 import * as num from "./num.js";
 import * as help from "./help.js";
+import { makeBuffer } from "./graph.js";
 
 let boot = () => false;
 let sim = () => false;
@@ -89,6 +90,7 @@ const $commonApi = {
     radians: num.radians,
     lerp: num.lerp,
     Track: num.Track,
+    boxNormal: num.boxNormal,
     vec4: num.vec4,
     vec3: num.vec3,
     mat4: num.mat4,
@@ -140,8 +142,10 @@ const $paintApi = {
   // Configuration
   color: graph.color,
   buffer: graph.makeBuffer,
+  setBuffer: graph.setBuffer,
   // 2D
   clear: graph.clear,
+  copy: graph.copy,
   plot: graph.plot,
   line: graph.line,
   box: graph.box,

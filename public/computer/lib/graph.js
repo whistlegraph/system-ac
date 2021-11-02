@@ -92,7 +92,7 @@ function plot(x, y) {
   pixels[i + 3] = c[3];
 }
 
-function copy(destX, destY, srcX, srcY, src, alpha) {
+function copy(destX, destY, srcX, srcY, src, alpha = 1.0) {
   destX = Math.round(destX);
   destY = Math.round(destY);
   srcX = Math.round(srcX);
@@ -115,8 +115,6 @@ function copy(destX, destY, srcX, srcY, src, alpha) {
 
   const destIndex = (destX + destY * width) * 4;
   const srcIndex = (srcX + srcY * src.width) * 4;
-
-  // console.log(destIndex, srcIndex);
 
   pixels[destIndex] = src.pixels[srcIndex] * alpha;
   pixels[destIndex + 1] = src.pixels[srcIndex + 1] * alpha;
@@ -154,9 +152,16 @@ function line(x0, y0, x1, y1) {
   }
 }
 
+// Takes in x, y, width and height and draws a filled rectangle.
 function box(x, y, width, height) {
-  for (let i = 0; i < height; i += 1) {
-    line(x, y + i, x + width, y + i);
+  if (Math.sign(height) === 1) {
+    for (let row = 0; row <= height; row += 1) {
+      line(x, y + row, x + width, y + row);
+    }
+  } else {
+    for (let row = 0; row >= height; row -= 1) {
+      line(x, y + row, x + width, y + row);
+    }
   }
 }
 
@@ -169,7 +174,7 @@ function noise16() {
   }
 }
 
-export { clear, plot, line, box, noise16 };
+export { clear, plot, copy, line, box, noise16 };
 
 // 3. 3D Drawing (Kinda mixed with some 2D)
 
