@@ -21,10 +21,10 @@ export function init(point) {
     e.returnValue = false;
   }
 
-  window.addEventListener("touchstart", absorbEvent);
-  window.addEventListener("touchend", absorbEvent);
-  window.addEventListener("touchmove", absorbEvent);
-  window.addEventListener("touchcancel", absorbEvent);
+  // window.addEventListener("touchstart", absorbEvent);
+  // window.addEventListener("touchend", absorbEvent);
+  // window.addEventListener("touchmove", absorbEvent);
+  // window.addEventListener("touchcancel", absorbEvent);
 
   // Add pointer events.
 
@@ -32,7 +32,7 @@ export function init(point) {
     if (!e.isPrimary) return;
     Object.assign(pen, point(e.x, e.y));
     penCursor = true;
-    if (e.pointerType === "touch") penCursor = false;
+    if (e.pointerType !== "mouse") penCursor = false;
   });
 
   window.addEventListener("pointerdown", function (e) {
@@ -40,13 +40,13 @@ export function init(point) {
     Object.assign(pen, point(e.x, e.y));
     pen.down = true;
     penCursor = true;
-    if (e.pointerType === "touch") penCursor = false;
+    if (e.pointerType !== "mouse") penCursor = false;
   });
 
   window.addEventListener("pointerup", function (e) {
     if (!e.isPrimary) return;
     pen.down = false;
-    if (e.pointerType === "touch") penCursor = false;
+    if (e.pointerType !== "mouse") penCursor = false;
   });
 
   return pen;
