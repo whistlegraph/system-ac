@@ -1,6 +1,6 @@
 import { boot } from "./computer/bios.js";
-// const host = "disks.aesthetic.computer";
-const host = "127.0.0.1:8081";
+const host = "disks.aesthetic.computer";
+// const host = "127.0.0.1:8081";
 const bpm = 120;
 
 // TODO: Make my first generative disk / piece.
