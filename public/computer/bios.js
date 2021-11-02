@@ -23,7 +23,7 @@ const sound = {
 };
 
 function frame() {
-  const subdivisions = 2 + window.devicePixelRatio;
+  const subdivisions = 3 + window.devicePixelRatio;
   const width = Math.floor(window.innerWidth / subdivisions) - 8;
   const height = Math.floor(window.innerHeight / subdivisions) - 8;
 

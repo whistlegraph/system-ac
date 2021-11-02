@@ -10,14 +10,12 @@ const pen = {
   changed: false,
 };
 
-let usingTouch = false;
 let penCursor = false;
 let lastPenX, lastPenY, lastPenDown, lastPenCursor;
 
 export function init(point) {
   // Prevent touch events from scrolling the page.
   function absorbEvent(e) {
-    usingTouch = true;
     e.stopPropagation();
     e.preventDefault();
     e.returnValue = false;
@@ -31,22 +29,24 @@ export function init(point) {
   // Add pointer events.
 
   window.addEventListener("pointermove", function (e) {
+    if (!e.isPrimary) return;
     Object.assign(pen, point(e.x, e.y));
     penCursor = true;
+    if (e.pointerType === "touch") penCursor = false;
   });
 
   window.addEventListener("pointerdown", function (e) {
+    if (!e.isPrimary) return;
     Object.assign(pen, point(e.x, e.y));
     pen.down = true;
     penCursor = true;
+    if (e.pointerType === "touch") penCursor = false;
   });
 
   window.addEventListener("pointerup", function (e) {
+    if (!e.isPrimary) return;
     pen.down = false;
-
-    if (e.pointerType === "touch") {
-      penCursor = false;
-    }
+    if (e.pointerType === "touch") penCursor = false;
   });
 
   return pen;
@@ -71,7 +71,7 @@ export function input() {
 export function render($) {
   const { plot, color } = $;
 
-  if (penCursor && !usingTouch) {
+  if (penCursor) {
     color(255, 255, 255);
 
     // Center
