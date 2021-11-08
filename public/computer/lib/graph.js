@@ -1,12 +1,4 @@
-import {
-  randInt,
-  randIntRange,
-  byteInterval17,
-  mat4,
-  vec4,
-  radians,
-  clamp,
-} from "./num.js";
+import { randInt, byteInterval17, mat4, vec4, radians, lerp } from "./num.js";
 
 let width, height, pixels;
 const depthBuffer = [];
@@ -58,15 +50,15 @@ export { makeBuffer, setBuffer, depthBuffer, color };
 
 function clear() {
   /*
-  // Note: I believe this would be the fastest method but would have to test it.
-  // Would have to copy up by doubling until we hit the length!
-  pixels[0] = 255;
-  pixels[1] = 255;
-  pixels[2] = 255;
-  pixels[3] = 255;
-
-  pixels.copyWithin(4, 0);
-  */
+                  // Note: I believe this would be the fastest method but would have to test it.
+                  // Would have to copy up by doubling until we hit the length!
+                  pixels[0] = 255;
+                  pixels[1] = 255;
+                  pixels[2] = 255;
+                  pixels[3] = 255;
+                
+                  pixels.copyWithin(4, 0);
+                  */
   for (let i = 0; i < pixels.length; i += 4) {
     pixels[i] = c[0]; // r
     pixels[i + 1] = c[1]; // g
@@ -86,10 +78,21 @@ function plot(x, y) {
 
   // Plot our pixel.
   const i = (x + y * width) * 4;
-  pixels[i] = c[0];
-  pixels[i + 1] = c[1];
-  pixels[i + 2] = c[2];
-  pixels[i + 3] = c[3];
+  const alpha = c[3];
+
+  if (alpha === 255) {
+    // No alpha blending, just copy.
+    pixels[i] = c[0];
+    pixels[i + 1] = c[1];
+    pixels[i + 2] = c[2];
+    pixels[i + 3] = 255;
+  } else if (alpha !== 0) {
+    // Lerp to blend.
+    pixels[i] = lerp(pixels[i], c[0], alpha / 255);
+    pixels[i + 1] = lerp(pixels[i + 1], c[1], alpha / 255);
+    pixels[i + 2] = lerp(pixels[i + 2], c[2], alpha / 255);
+    pixels[i + 3] = 255;
+  }
 }
 
 function copy(destX, destY, srcX, srcY, src, alpha = 1.0) {
@@ -116,18 +119,30 @@ function copy(destX, destY, srcX, srcY, src, alpha = 1.0) {
   const destIndex = (destX + destY * width) * 4;
   const srcIndex = (srcX + srcY * src.width) * 4;
 
+  // if (alpha === 1) {
   pixels[destIndex] = src.pixels[srcIndex] * alpha;
   pixels[destIndex + 1] = src.pixels[srcIndex + 1] * alpha;
   pixels[destIndex + 2] = src.pixels[srcIndex + 2] * alpha;
   pixels[destIndex + 3] = src.pixels[srcIndex + 3];
+  //} else {
+  //  console.warn("Copy alpha not available.");
+  //}
+}
+
+function paste(from, destX = 0, destY = 0) {
+  for (let x = 0; x < from.width; x += 1) {
+    for (let y = 0; y < from.height; y += 1) {
+      copy(destX + x, destY + y, x, y, from);
+    }
+  }
 }
 
 function line(x0, y0, x1, y1) {
   // Make sure everything is ceil'd.
-  x0 = Math.round(x0);
-  y0 = Math.round(y0);
-  x1 = Math.round(x1);
-  y1 = Math.round(y1);
+  x0 = Math.ceil(x0);
+  y0 = Math.ceil(y0);
+  x1 = Math.ceil(x1);
+  y1 = Math.ceil(y1);
 
   // Bresenham's Algorithm
   const dx = Math.abs(x1 - x0);
@@ -154,12 +169,14 @@ function line(x0, y0, x1, y1) {
 
 // Takes in x, y, width and height and draws a filled rectangle.
 function box(x, y, width, height) {
+  width -= 1;
+
   if (Math.sign(height) === 1) {
-    for (let row = 0; row <= height; row += 1) {
+    for (let row = 0; row < height; row += 1) {
       line(x, y + row, x + width, y + row);
     }
   } else {
-    for (let row = 0; row >= height; row -= 1) {
+    for (let row = 0; row > height; row -= 1) {
       line(x, y + row, x + width, y + row);
     }
   }
@@ -174,7 +191,7 @@ function noise16() {
   }
 }
 
-export { clear, plot, copy, line, box, noise16 };
+export { clear, plot, copy, paste, line, box, noise16 };
 
 // 3. 3D Drawing (Kinda mixed with some 2D)
 
@@ -823,10 +840,10 @@ function fillTriangle(minYVert, midYVert, maxYVert, texture, alpha) {
   // TODO: Add normal to vertex (for basic lighting) here?
 
   /*
-  if (triangleAreaDouble(minYVert, maxYVert, midYVert) >= 0) {
-    return;
-  }
-   */
+                                                        if (triangleAreaDouble(minYVert, maxYVert, midYVert) >= 0) {
+                                                          return;
+                                                        }
+                                                         */
 
   if (maxYVert.y < midYVert.y) {
     const temp = maxYVert;
@@ -854,24 +871,22 @@ function fillTriangle(minYVert, midYVert, maxYVert, texture, alpha) {
   // TODO: How to accurately outline a triangle?
   // in drawScanLine: Add border at xMin and xMax and also use j to know if we are at the bottom.
 
-  const tempColor = c.slice();
-  color(127, 127, 127);
-  /*
-  line(minYVert.x, minYVert.y, midYVert.x, midYVert.y);
-  line(midYVert.x, midYVert.y, maxYVert.x, maxYVert.y);
-  line(minYVert.x, minYVert.y, maxYVert.x, maxYVert.y);
-  color(...tempColor);
-  */
-  /*
-  color(...minYVert.color24bit);
-  plot(minYVert.x, minYVert.y);
-
-  color(...midYVert.color24bit);
-  plot(midYVert.x, midYVert.y);
-
-  color(...maxYVert.color24bit);
-  plot(maxYVert.x, maxYVert.y);
-  */
+  // const tempColor = c.slice();
+  // color(127, 127, 127);
+  // line(minYVert.x, minYVert.y, midYVert.x, midYVert.y);
+  // line(midYVert.x, midYVert.y, maxYVert.x, maxYVert.y);
+  // line(minYVert.x, minYVert.y, maxYVert.x, maxYVert.y);
+  //
+  // color(...tempColor);
+  //
+  // color(...minYVert.color24bit);
+  // plot(minYVert.x, minYVert.y);
+  //
+  // color(...midYVert.color24bit);
+  // plot(midYVert.x, midYVert.y);
+  //
+  // color(...maxYVert.color24bit);
+  // plot(maxYVert.x, maxYVert.y);
 }
 
 function triangleAreaDouble(a, b, c) {

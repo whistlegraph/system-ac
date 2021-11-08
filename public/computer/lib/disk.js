@@ -1,7 +1,6 @@
 import * as graph from "./graph.js";
 import * as num from "./num.js";
 import * as help from "./help.js";
-import { makeBuffer } from "./graph.js";
 
 let boot = () => false;
 let sim = () => false;
@@ -10,6 +9,7 @@ let beat = () => false;
 // let query = ""; // Passing in original URL parameters.
 
 let loading = false;
+let reframe;
 let paintCount = 0n;
 
 // Load the disk.
@@ -146,6 +146,7 @@ const $paintApi = {
   // 2D
   clear: graph.clear,
   copy: graph.copy,
+  paste: graph.paste,
   plot: graph.plot,
   line: graph.line,
   box: graph.box,
@@ -253,6 +254,17 @@ function makeFrame(e) {
 
     $api.screen = screen;
 
+    $api.frame = function (width, height) {
+      // Don't do anything if there is no change.
+      if (screen.width === width && screen.height === height) return;
+
+      screen.width = width;
+      screen.height = height;
+      screen.pixels = new Uint8ClampedArray(screen.width * screen.height * 4);
+      graph.setBuffer(screen);
+      reframe = { width, height };
+    };
+
     $api.pen = e.data.pen;
 
     graph.setBuffer(screen);
@@ -276,10 +288,40 @@ function makeFrame(e) {
       paintChanged = true;
     }
 
-    send({ pixels: e.data.pixels, paintChanged, loading }, [e.data.pixels]);
+    // Check to see if we need to reframe everything.
+    if (reframe) {
+      // Send render with reframe data.
+      send(
+        {
+          pixels: screen.pixels,
+          paintChanged,
+          loading,
+          reframe,
+        },
+        [screen.pixels]
+      );
+    } else {
+      // Send render.
+      send(
+        {
+          pixels: screen.pixels,
+          paintChanged,
+          loading,
+        },
+        [screen.pixels]
+      );
+    }
 
     paintCount = paintCount + 1n;
+
+    // TODO: How to reframe without having to redraw, or redraw if reframe occurs?
+    if (reframe) {
+      // Kill reframe, which resets the paintCount.
+      // paintCount = 0n;
+      reframe = undefined;
+    }
   } else {
+    // Send update.
     send({ pixels: e.data.pixels, didntRender: true, loading }, [
       e.data.pixels,
     ]);
