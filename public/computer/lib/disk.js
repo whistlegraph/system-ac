@@ -4,6 +4,7 @@ import * as help from "./help.js";
 
 let boot = () => false;
 let sim = () => false;
+// let paint = () => false;
 let paint = ($) => $.noise16();
 let beat = () => false;
 // let query = ""; // Passing in original URL parameters.
@@ -45,7 +46,7 @@ const { load, send } = (() => {
       //query = search;
       $commonApi.query = search;
       loading = false;
-    }, 250);
+    }, 100);
   }
 
   const isWorker = typeof importScripts === "function";

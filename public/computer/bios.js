@@ -10,10 +10,13 @@ async function boot(
   path = "index",
   bpm = 60,
   host = window.location.host,
-  resolution
+  resolution,
+  debug
 ) {
+  let pen;
+
   // Define a blank starter disk that just renders noise and plays a tone.
-  const disk = {};
+  let disk;
 
   // 1. Rendering
   const canvas = document.createElement("canvas");
@@ -30,31 +33,29 @@ async function boot(
   function frame(width, height) {
     width = width || fixedWidth;
     height = height || fixedHeight;
+    const gapSize = 8 * window.devicePixelRatio;
 
     if (width === undefined && height === undefined) {
       // Automatically set and frame a reasonable resolution.
       const subdivisions = 2 + window.devicePixelRatio;
-      width = Math.floor(window.innerWidth / subdivisions) - 8;
-      height = Math.floor(window.innerHeight / subdivisions) - 8;
-      projectedWidth = width * subdivisions;
-      projectedHeight = height * subdivisions;
+      width = Math.floor(window.innerWidth / subdivisions);
+      height = Math.floor(window.innerHeight / subdivisions);
+      projectedWidth = width * subdivisions - gapSize;
+      projectedHeight = height * subdivisions - gapSize;
     } else {
       // Or do it manually if both width and height are defined.
       fixedWidth = width;
       fixedHeight = height;
 
-      const ratio = width / height;
-      const pixelGap = 3;
+      const pixelGap = 1;
 
-      if (window.innerHeight > window.innerWidth) {
-        const gapSize = (window.innerWidth / width) * 2 * pixelGap;
-        projectedWidth = window.innerWidth - gapSize;
-        projectedHeight = window.innerWidth * ratio - gapSize;
-      } else {
-        const gapSize = (window.innerHeight / height) * 2 * pixelGap;
-        projectedWidth = window.innerHeight * ratio - gapSize;
-        projectedHeight = window.innerHeight - gapSize;
-      }
+      const scale = Math.min(
+        window.innerWidth / width,
+        window.innerHeight / height
+      );
+
+      projectedWidth = Math.floor(width * scale - gapSize);
+      projectedHeight = Math.floor(height * scale - gapSize);
     }
 
     // Store any pre-written imageData, in case of reframing.
@@ -163,12 +164,10 @@ async function boot(
   }
 
   // TODO: Add mute
-  /*
-          function mute() {
-            audioContext.suspend();
-            // Or... audioContext.resume();
-          }
-          */
+  // function mute() {
+  //   audioContext.suspend();
+  //   // Or... audioContext.resume();
+  // }
 
   // Grab query parameters.
   const search = new URL(self.location).search;
@@ -190,12 +189,39 @@ async function boot(
     send({ path, host, search });
   };
 
+  // Start everything once the disk is loaded.
   function loaded(e) {
     if (e.data.loaded === true) {
       console.log("💾 Loaded:", path, "🌐 from:", host);
       onMessage = receivedChange;
-      disk.requestBeat = requestBeat;
-      disk.requestFrame = requestFrame;
+      disk = { requestBeat, requestFrame };
+
+      // Pen (also handles touch & pointer events)
+      pen = Pen.init((x, y) => {
+        return {
+          x: Math.floor(((x - canvasRect.x) / projectedWidth) * screen.width),
+          y: Math.floor(((y - canvasRect.y) / projectedHeight) * screen.height),
+        };
+      });
+
+      // Display
+      frame(resolution?.width, resolution?.height);
+
+      // Sound
+      startSound(); // This runs disk.beat
+
+      // ➰ Core Loops for User Input, Music, Object Updates, and Rendering
+      Loop.start(
+        () => {
+          Pen.input();
+          // TODO: Key.input();
+          // TODO: Voice.input();
+        },
+        function (needsRender, updateTimes) {
+          // console.log(updateTimes); // Note: No updates happen yet before a render.
+          disk.requestFrame?.(needsRender, updateTimes);
+        }
+      );
     }
   }
 
@@ -312,17 +338,19 @@ async function boot(
 
       Pen.render({ plot: Graph.plot, color: Graph.color });
 
-      if (e.data.loading === true) UI.spinner(Graph);
+      if (e.data.loading === true && debug === true) UI.spinner(Graph);
 
       ctx.putImageData(imageData, 0, 0);
     } else if (frameCached === false) {
       frameCached = true;
       // Pause
-      Graph.color(0, 255, 255);
-      Graph.line(3, 3, 3, 9);
-      Graph.line(6, 3, 6, 9);
-      ctx.putImageData(imageData, 0, 0);
-    } else if (e.data.loading === true) {
+      if (debug) {
+        Graph.color(0, 255, 255);
+        Graph.line(3, 3, 3, 9);
+        Graph.line(6, 3, 6, 9);
+        ctx.putImageData(imageData, 0, 0);
+      }
+    } else if (e.data.loading === true && debug === true) {
       UI.spinner(Graph);
       ctx.putImageData(imageData, 0, 0);
     }
@@ -331,33 +359,6 @@ async function boot(
     // TODO: Do renders always need to be requested?
     //console.log("🎨 MS:", (performance.now() - startTime).toFixed(1));
   }
-
-  // Pen (also handles touch & pointer events)
-  const pen = Pen.init((x, y) => {
-    return {
-      x: Math.floor(((x - canvasRect.x) / projectedWidth) * screen.width),
-      y: Math.floor(((y - canvasRect.y) / projectedHeight) * screen.height),
-    };
-  });
-
-  // Display
-  frame(resolution?.width, resolution?.height);
-
-  // Sound
-  startSound(); // This runs disk.beat
-
-  // ➰ Core Loops for User Input, Music, Object Updates, and Rendering
-  Loop.start(
-    () => {
-      Pen.input();
-      // TODO: Key.input();
-      // TODO: Voice.input();
-    },
-    function (needsRender, updateTimes) {
-      // console.log(updateTimes); // Note: No updates happen yet before a render.
-      disk.requestFrame?.(needsRender, updateTimes);
-    }
-  );
 }
 
 export { boot };
