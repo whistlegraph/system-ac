@@ -327,17 +327,18 @@ async function boot(
 
     frameAlreadyRequested = false;
 
+    if (e.data.cursorCode) Pen.setCursorCode(e.data.cursorCode);
+
     if (e.data.didntRender === true) return;
 
     Graph.setBuffer(screen); // Why does screen exist here?
 
-    pixelsDidChange = e.data.paintChanged;
+    pixelsDidChange = e.data.paintChanged || false;
 
     if (pixelsDidChange || pen.changed) {
       frameCached = false;
 
-      Pen.render({ plot: Graph.plot, color: Graph.color });
-
+      Pen.render(Graph);
       if (e.data.loading === true && debug === true) UI.spinner(Graph);
 
       ctx.putImageData(imageData, 0, 0);

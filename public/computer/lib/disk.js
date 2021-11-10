@@ -11,6 +11,7 @@ let beat = () => false;
 
 let loading = false;
 let reframe;
+let cursorCode;
 let paintCount = 0n;
 
 // Load the disk.
@@ -225,7 +226,9 @@ function makeFrame(e) {
       height: e.data.height,
     };
 
+    $api.cursor = (code) => (cursorCode = code);
     $api.pen = e.data.pen;
+
     // $api.updateMetronome = e.data.updateMetronome;
 
     // Update the number of times that are needed.
@@ -266,6 +269,7 @@ function makeFrame(e) {
       reframe = { width, height };
     };
 
+    $api.cursor = (code) => (cursorCode = code);
     $api.pen = e.data.pen;
 
     graph.setBuffer(screen);
@@ -289,37 +293,28 @@ function makeFrame(e) {
       paintChanged = true;
     }
 
-    // Check to see if we need to reframe everything.
-    if (reframe) {
-      // Send render with reframe data.
-      send(
-        {
-          pixels: screen.pixels,
-          paintChanged,
-          loading,
-          reframe,
-        },
-        [screen.pixels]
-      );
-    } else {
-      // Send render.
-      send(
-        {
-          pixels: screen.pixels,
-          paintChanged,
-          loading,
-        },
-        [screen.pixels]
-      );
-    }
+    // Return frame data back to the main thread.
+    const sendData = {
+      pixels: screen.pixels,
+    };
+
+    // Optional messages to send.
+    if (paintChanged === true) sendData.paintChanged = true;
+    if (loading === true) sendData.loading = true;
+    if (reframe) sendData.reframe = reframe;
+    if (cursorCode) sendData.cursorCode = cursorCode;
+
+    send(sendData, [screen.pixels]);
 
     paintCount = paintCount + 1n;
 
     // TODO: How to reframe without having to redraw, or redraw if reframe occurs?
     if (reframe) {
-      // Kill reframe, which resets the paintCount.
-      // paintCount = 0n;
       reframe = undefined;
+    }
+
+    if (cursorCode) {
+      cursorCode = undefined;
     }
   } else {
     // Send update.

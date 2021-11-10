@@ -58,8 +58,24 @@ export class Track {
   }
 }
 
-// Adjusts a box so that x, y is always the top left.
+// Adjusts a box so that x, y is always the top left and the box has a min
+// width and height of 1.
 export function boxNormal(x, y, w, h) {
+  // Make sure w and h are at least 1.
+  if (w < 0) {
+    w -= 1;
+    x += 1;
+  } else if (w >= 0) {
+    w += 1;
+  }
+
+  if (h < 0) {
+    h -= 1;
+    y += 1;
+  } else if (h >= 0) {
+    h += 1;
+  }
+
   if (w < 0) {
     x += w;
     w = Math.abs(w);

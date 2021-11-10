@@ -10,6 +10,7 @@ const pen = {
   changed: false,
 };
 
+let cursorCode;
 let penCursor = false;
 let lastPenX, lastPenY, lastPenDown, lastPenCursor;
 
@@ -68,10 +69,10 @@ export function input() {
   // Wait until after rendering to set changed to false, because other render functions may check it.
 }
 
-export function render($) {
-  const { plot, color } = $;
+export function render({ plot, color }) {
+  if (!penCursor) return;
 
-  if (penCursor) {
+  if (!cursorCode) {
     color(255, 255, 255);
 
     // Center
@@ -92,7 +93,24 @@ export function render($) {
     // Right
     plot(pen.x + 2, pen.y);
     plot(pen.x + 3, pen.y);
+  } else if (cursorCode === "tiny") {
+    color(255, 255, 0, 200);
+    plot(pen.x - 1, pen.y);
+    plot(pen.x + 1, pen.y);
+    // plot(pen.x, pen.y);
+    plot(pen.x, pen.y - 1);
+    plot(pen.x, pen.y + 1);
+  } else if (cursorCode === "dot") {
+    // ...
+    color(255, 255, 255, 128);
+    plot(pen.x, pen.y);
+  } else if (cursorCode === "none") {
+    // ...
   }
 
   pen.changed = false;
+}
+
+export function setCursorCode(code) {
+  cursorCode = code;
 }
