@@ -167,17 +167,30 @@ function line(x0, y0, x1, y1) {
   }
 }
 
-// Takes in x, y, width and height and draws a filled rectangle.
-function box(x, y, width, height) {
-  width -= 1;
+// Takes in x, y, width and height and draws an
+// outline, inline (1px) or filled rectangle.
+function box(x, y, w, h, mode = "fill") {
+  if (mode === "outline") {
+    line(x - 1, y - 1, x + w, y - 1); // Top
+    line(x - 1, y + h, x + w, y + h); // Bottom
+    line(x - 1, y, x - 1, y + h - 1); // Left
+    line(x + w, y, x + w, y + h - 1); // Right
+  } else if (mode === "inline") {
+    line(x, y, x + w - 1, y); // Top
+    line(x, y + h - 1, x + w - 1, y + h - 1); // Bottom
+    line(x, y + 1, x, y + h - 2); // Left
+    line(x + w - 1, y + 1, x + w - 1, y + h - 2); // Right
+  } else if (mode === "fill") {
+    w -= 1;
 
-  if (Math.sign(height) === 1) {
-    for (let row = 0; row < height; row += 1) {
-      line(x, y + row, x + width, y + row);
-    }
-  } else {
-    for (let row = 0; row > height; row -= 1) {
-      line(x, y + row, x + width, y + row);
+    if (Math.sign(height) === 1) {
+      for (let row = 0; row < h; row += 1) {
+        line(x, y + row, x + w, y + row);
+      }
+    } else {
+      for (let row = 0; row > h; row -= 1) {
+        line(x, y + row, x + w, y + row);
+      }
     }
   }
 }

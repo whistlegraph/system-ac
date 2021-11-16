@@ -14,73 +14,6 @@ let reframe;
 let cursorCode;
 let paintCount = 0n;
 
-// Load the disk.
-const { load, send } = (() => {
-  let loadUrlCount = 1;
-  let loadHost;
-
-  async function load(path, host = loadHost, search) {
-    if (loading === false) {
-      loading = true;
-    } else {
-      // TODO: Implement some kind of loading screen system here?
-      console.warn("Already loading another disk:", path);
-      return;
-    }
-
-    console.log("💾 Loading:", path, "🌐 from:", host);
-
-    // The `loadUrlCount` query parameter busts the cache so changes can be seen if the disk code changes.
-    const fullUrl = "https://" + host + "/" + path + ".js?lc=" + loadUrlCount;
-    loadUrlCount += 1;
-
-    const module = await import(fullUrl);
-    loadHost = host;
-
-    // Artificially imposed loading by at least 1/4 sec.
-    setTimeout(() => {
-      paintCount = 0n;
-      boot = module.boot;
-      sim = module.sim;
-      paint = module.paint;
-      beat = module.beat;
-      //query = search;
-      $commonApi.query = search;
-      loading = false;
-    }, 100);
-  }
-
-  const isWorker = typeof importScripts === "function";
-  const noWorker = { onMessage: undefined, postMessage: undefined };
-
-  // Start by responding to a load message, then change
-  // the message response to makeFrame.
-  if (isWorker) {
-    onmessage = async function (e) {
-      await load(e.data.path, e.data.host, e.data.search);
-      send({ loaded: true });
-      onmessage = makeFrame;
-    };
-  } else {
-    noWorker.onMessage = async (e) => {
-      e = { data: e };
-      await load(e.data.path, e.data.host, e.data.search);
-      noWorker.onMessage = (d) => makeFrame({ data: d });
-      send({ loaded: true });
-    };
-  }
-
-  function send(data) {
-    if (isWorker) {
-      postMessage(data);
-    } else {
-      noWorker.postMessage({ data });
-    }
-  }
-
-  return { load, send };
-})();
-
 // 👩‍💻 Disk API
 
 // For every function to access.
@@ -105,9 +38,7 @@ const $commonApi = {
 };
 
 // Just for "update".
-const $updateApi = {
-  load,
-};
+const $updateApi = {};
 
 // Pre-fab models:
 const SQUARE = {
@@ -160,6 +91,76 @@ const $paintApi = {
   SQUARE,
 };
 
+// Load the disk.
+const { load, send } = (() => {
+  let loadUrlCount = 1;
+  let loadHost;
+
+  async function load(path, host = loadHost, search) {
+    if (loading === false) {
+      loading = true;
+    } else {
+      // TODO: Implement some kind of loading screen system here?
+      console.warn("Already loading another disk:", path);
+      return;
+    }
+
+    console.log("💾 Loading:", path, "🌐 from:", host);
+
+    // The `loadUrlCount` query parameter busts the cache so changes can be seen
+    // if the disk code changes.
+    const fullUrl = "https://" + host + "/" + path + ".js?lc=" + loadUrlCount;
+    loadUrlCount += 1;
+
+    const module = await import(fullUrl);
+    loadHost = host;
+
+    // Artificially imposed loading by at least 1/4 sec.
+    setTimeout(() => {
+      paintCount = 0n;
+      boot = module.boot;
+      sim = module.sim;
+      paint = module.paint;
+      beat = module.beat;
+      //query = search;
+      $commonApi.query = search;
+      $updateApi.load = load;
+      loading = false;
+    }, 100);
+  }
+
+  const isWorker = typeof importScripts === "function";
+  const noWorker = { onMessage: undefined, postMessage: undefined };
+
+  // Start by responding to a load message, then change
+  // the message response to makeFrame.
+  if (isWorker) {
+    onmessage = async function (e) {
+      await load(e.data.path, e.data.host, e.data.search);
+      send({ loaded: true });
+      onmessage = makeFrame;
+    };
+  } else {
+    noWorker.onMessage = async (e) => {
+      e = { data: e };
+      await load(e.data.path, e.data.host, e.data.search);
+      noWorker.onMessage = (d) => makeFrame({ data: d });
+      send({ loaded: true });
+    };
+  }
+
+  function send(data) {
+    if (isWorker) {
+      postMessage(data);
+    } else {
+      noWorker.postMessage({ data });
+    }
+  }
+
+  return { load, send };
+})();
+
+// Produce a frame.
 function makeFrame(e) {
   // 1. Beat
   if (e.data.needsBeat) {

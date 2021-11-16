@@ -5,7 +5,7 @@ import { boot } from "./computer/bios.js";
 const host = "disks.aesthetic.computer";
 // const host = `${window.location.hostname}:8081`;
 const bpm = 120;
-const debug = false;
+const debug = true;
 
 // TODO: Make my first generative disk / piece and mint it.
 

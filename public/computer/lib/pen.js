@@ -70,8 +70,6 @@ export function input() {
 }
 
 export function render({ plot, color }) {
-  if (!penCursor) return;
-
   if (!cursorCode) {
     color(255, 255, 255);
 
