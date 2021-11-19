@@ -168,8 +168,59 @@ function line(x0, y0, x1, y1) {
 }
 
 // Takes in x, y, width and height and draws an
-// outline, inline (1px) or filled rectangle.
-function box(x, y, w, h, mode = "fill") {
+// outline, inline (1px) or filled rectangle, optionally
+// from the center by inputting eg: "inlineCenter" in mode.
+const BOX_CENTER = "*center";
+// x, y, size (3)
+// x, y, w, h (4)
+// x, y, size, mode (4)
+// x, y, w, h, mode (5)
+function box() {
+  let x,
+    y,
+    w,
+    h,
+    mode = "fill";
+
+  if (arguments.length === 3) {
+    // x, y, size
+    x = arguments[0];
+    y = arguments[1];
+    w = arguments[2];
+    h = arguments[2];
+  } else if (arguments.length === 4) {
+    if (typeof arguments[3] === "number") {
+      // x, y, w, h
+      x = arguments[0];
+      y = arguments[1];
+      w = arguments[2];
+      h = arguments[3];
+    } else {
+      // x, y, size, mode
+      x = arguments[0];
+      y = arguments[1];
+      w = arguments[2];
+      h = arguments[2];
+      mode = arguments[3];
+    }
+  } else if (arguments.length === 5) {
+    // x, y, w, h, mode
+    x = arguments[0];
+    y = arguments[1];
+    w = arguments[2];
+    h = arguments[3];
+    mode = arguments[4];
+  } else {
+    return console.error("Invalid box call.");
+  }
+
+  // Check for "Center" at the end of mode.
+  if (mode.endsWith(BOX_CENTER)) {
+    x = x - w / 2;
+    y = y - h / 2;
+    mode = mode.slice(0, -BOX_CENTER.length); // Remove it.
+  }
+
   if (mode === "outline") {
     line(x - 1, y - 1, x + w, y - 1); // Top
     line(x - 1, y + h, x + w, y + h); // Bottom

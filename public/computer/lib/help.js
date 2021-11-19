@@ -10,6 +10,12 @@ export function every(obj, value) {
   Object.keys(obj).forEach((k) => (obj[k] = value));
 }
 
+// Returns a random value from an object.
+export function any(obj) {
+  const keys = Object.keys(obj);
+  return obj[keys[(keys.length * Math.random()) << 0]];
+}
+
 // Run a function on every value in an object.
 // Ex. each(obj, (value, key) => console.log(value, key));
 export function each(obj, fn) {

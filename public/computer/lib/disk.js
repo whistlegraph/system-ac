@@ -1,5 +1,6 @@
 import * as graph from "./graph.js";
 import * as num from "./num.js";
+import * as geo from "./geo.js";
 import * as help from "./help.js";
 
 let boot = () => false;
@@ -25,14 +26,17 @@ const $commonApi = {
     radians: num.radians,
     lerp: num.lerp,
     Track: num.Track,
-    boxNormal: num.boxNormal,
     vec4: num.vec4,
     vec3: num.vec3,
     mat4: num.mat4,
   },
+  geo: {
+    Box: geo.Box,
+  },
   help: {
     choose: help.choose,
     every: help.every,
+    any: help.any,
     each: help.each,
   },
 };
@@ -71,13 +75,47 @@ const TRIANGLE = {
   indices: [0, 1, 2],
 };
 
+// Inputs: RGB, RGBA or an array of those, a single number for grayscale
+// and an object with properties from which it will randomly pick one.
+function ink() {
+  let args = arguments;
+
+  if (args.length === 1) {
+    const isNumber = () => typeof args[0] === "number";
+    const isArray = () => Array.isArray(args[0]);
+
+    // If it's an object then randomly pick a value & re-run.
+    if (!isNumber() && !isArray()) {
+      return ink(help.any(args[0]));
+    }
+
+    // If single argument is a number then replicate it across the first 3 fields.
+    if (isNumber()) {
+      args = Array.from(args);
+      args.push(args[0], args[0]);
+    } else if (isArray()) {
+      // Or if it's an array, then spread it out.
+      args = args[0];
+    }
+  }
+
+  graph.color(...args);
+}
+
 const $paintApi = {
   // Configuration
-  color: graph.color,
-  buffer: graph.makeBuffer,
+  ink: function () {
+    ink(...arguments);
+    return $paintApi;
+  },
+  pixels: graph.makeBuffer,
   setBuffer: graph.setBuffer,
   // 2D
-  clear: graph.clear,
+  wipe: function () {
+    if (arguments.length > 0) ink(...arguments);
+    graph.clear();
+    return $paintApi;
+  },
   copy: graph.copy,
   paste: graph.paste,
   plot: graph.plot,
@@ -160,6 +198,10 @@ const { load, send } = (() => {
   return { load, send };
 })();
 
+// TODO: Move this into the Pen.js file and make that a class.
+let penDragging = false;
+let penLastPos, penDragStartPos;
+
 // Produce a frame.
 function makeFrame(e) {
   // 1. Beat
@@ -228,7 +270,48 @@ function makeFrame(e) {
     };
 
     $api.cursor = (code) => (cursorCode = code);
+
+    // Bring in pen data and figure out what dragging event we are in.
     $api.pen = e.data.pen;
+    const pen = $api.pen;
+
+    // TODO: All this should move to Pen and get sent over in the frame.
+    if (pen.changed) {
+      if (pen.down) {
+        if (penDragging === false) {
+          penDragging = true;
+
+          penDragStartPos = { x: pen.x, y: pen.y };
+          penLastPos = { x: pen.x, y: pen.y };
+
+          pen.event = "down";
+        } else if (penDragging === true) {
+          const penDragAmount = {
+            x: pen.x - penDragStartPos.x,
+            y: pen.y - penDragStartPos.y,
+          };
+          const penDragDelta = {
+            x: pen.x - penLastPos.x,
+            y: pen.y - penLastPos.y,
+          };
+
+          penLastPos = { x: pen.x, y: pen.y };
+
+          pen.dragAmount = penDragAmount;
+          pen.dragDelta = penDragDelta;
+
+          pen.dragStartPos = penDragStartPos;
+          pen.lastPos = penLastPos;
+
+          pen.event = "drawing";
+        }
+      } else if (penDragging === true) {
+        pen.event = "up";
+        penDragging = false;
+      }
+    }
+
+    pen.is = (is) => pen.event === is;
 
     // $api.updateMetronome = e.data.updateMetronome;
 
@@ -259,7 +342,7 @@ function makeFrame(e) {
 
     $api.screen = screen;
 
-    $api.frame = function (width, height) {
+    $api.resize = function (width, height) {
       // Don't do anything if there is no change.
       if (screen.width === width && screen.height === height) return;
 
@@ -309,7 +392,8 @@ function makeFrame(e) {
 
     paintCount = paintCount + 1n;
 
-    // TODO: How to reframe without having to redraw, or redraw if reframe occurs?
+    // TODO: How to reframe without having to redraw, or redraw if reframe
+    // occurs?
     if (reframe) {
       reframe = undefined;
     }

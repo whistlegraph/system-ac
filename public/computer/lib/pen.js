@@ -70,7 +70,7 @@ export function input() {
 }
 
 export function render({ plot, color }) {
-  if (!cursorCode) {
+  if (!cursorCode || cursorCode === "precise") {
     color(255, 255, 255);
 
     // Center
@@ -100,7 +100,7 @@ export function render({ plot, color }) {
     plot(pen.x, pen.y + 1);
   } else if (cursorCode === "dot") {
     // ...
-    color(255, 255, 255, 128);
+    color(255, 0, 0, 128);
     plot(pen.x, pen.y);
   } else if (cursorCode === "none") {
     // ...
