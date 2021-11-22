@@ -3,35 +3,22 @@
 export class Box {
   x = 0;
   y = 0;
-  w = 0;
-  h = 0;
+  w = 1;
+  h = 1;
 
   constructor(x, y, w, h) {
     this.x = x;
     this.y = y;
     this.w = w;
     this.h = h;
+
+    if (this.w === 0) this.w = 1;
+    if (this.h === 0) this.h = 1;
   }
 
-  // Adjusts a box so that x, y is always the top left and the box has a min
-  // width and height of 1.
-  get fromTopLeft() {
+  // Yields a box where x, y is at the top left and w, h are positive.
+  get abs() {
     let { x, y, w, h } = this;
-
-    // Make sure w and h are at least 1.
-    if (w < 0) {
-      w -= 1;
-      x += 1;
-    } else if (w >= 0) {
-      w += 1;
-    }
-
-    if (h < 0) {
-      h -= 1;
-      y += 1;
-    } else if (h >= 0) {
-      h += 1;
-    }
 
     if (w < 0) {
       x += w;
@@ -46,7 +33,8 @@ export class Box {
     return new Box(x, y, w, h);
   }
 
-  croppedTo(toX, toY, toW, toH) {
+  // Crops a box to another box.
+  crop(toX, toY, toW, toH) {
     let { x, y, w, h } = this;
 
     // Crop left side.
@@ -72,5 +60,11 @@ export class Box {
     }
 
     return new Box(x, y, w, h);
+  }
+
+  // Moves the box by x and y.
+  move({ x, y }) {
+    this.x += x;
+    this.y += y;
   }
 }

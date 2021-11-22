@@ -1,6 +1,6 @@
 // 📦 All Imports
 import * as Loop from "./lib/loop.js";
-import * as Pen from "./lib/pen.js";
+import { Pen } from "./lib/pen.js";
 import * as Graph from "./lib/graph.js";
 import * as UI from "./lib/ui.js";
 import { apiObject } from "./lib/helpers.js";
@@ -197,7 +197,7 @@ async function boot(
       disk = { requestBeat, requestFrame };
 
       // Pen (also handles touch & pointer events)
-      pen = Pen.init((x, y) => {
+      pen = new Pen((x, y) => {
         return {
           x: Math.floor(((x - canvasRect.x) / projectedWidth) * screen.width),
           y: Math.floor(((y - canvasRect.y) / projectedHeight) * screen.height),
@@ -213,7 +213,7 @@ async function boot(
       // ➰ Core Loops for User Input, Music, Object Updates, and Rendering
       Loop.start(
         () => {
-          Pen.input();
+          pen.poll();
           // TODO: Key.input();
           // TODO: Voice.input();
         },
@@ -239,12 +239,8 @@ async function boot(
         needsBeat: true,
         time,
         bpm: sound.bpm,
-        pixels: screen.pixels.buffer,
-        width: canvas.width,
-        height: canvas.height,
-        pen,
       },
-      [sound.bpm, screen.pixels.buffer]
+      [sound.bpm] // TODO: Why not just send the number here?
     );
   }
 
@@ -327,7 +323,7 @@ async function boot(
 
     frameAlreadyRequested = false;
 
-    if (e.data.cursorCode) Pen.setCursorCode(e.data.cursorCode);
+    if (e.data.cursorCode) pen.setCursorCode(e.data.cursorCode);
 
     if (e.data.didntRender === true) return;
 
@@ -338,7 +334,7 @@ async function boot(
     if (pixelsDidChange || pen.changed) {
       frameCached = false;
 
-      Pen.render(Graph);
+      pen.render(Graph);
       if (e.data.loading === true && debug === true) UI.spinner(Graph);
 
       ctx.putImageData(imageData, 0, 0);

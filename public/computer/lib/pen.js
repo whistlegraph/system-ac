@@ -1,114 +1,161 @@
-// ✍️ Pen
+// ✍️Pen
 
-// Note: This is currently a singleton with an init function and some exported
-// functions that act on one instance.
+// TODO: Clean up this whole class and its connections to the system.
 
-const pen = {
-  x: undefined,
-  y: undefined,
-  down: false,
-  changed: false,
-};
+export class Pen {
+  x;
+  y;
+  down = false;
+  changed = false;
 
-let cursorCode;
-let penCursor = false;
-let lastPenX, lastPenY, lastPenDown, lastPenCursor;
+  cursorCode;
+  penCursor = false;
 
-export function init(point) {
-  // Prevent touch events from scrolling the page.
-  function absorbEvent(e) {
-    e.stopPropagation();
-    e.preventDefault();
-    e.returnValue = false;
+  lastPenX;
+  lastPenY;
+  lastPenDown;
+  lastPenCursor;
+
+  penDragging = false;
+
+  isDown = false;
+
+  penLastPos;
+
+  penDragStartPos;
+
+  dragBox;
+
+  constructor(point) {
+    // Prevent touch events from scrolling the page.
+    function absorbEvent(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      e.returnValue = false;
+    }
+
+    // Add pointer events.
+    const pen = this;
+
+    window.addEventListener("pointermove", function (e) {
+      if (!e.isPrimary) return;
+      Object.assign(pen, point(e.x, e.y));
+      pen.penCursor = true;
+      if (e.pointerType !== "mouse") pen.penCursor = false;
+    });
+
+    window.addEventListener("pointerdown", function (e) {
+      if (!e.isPrimary) return;
+      Object.assign(pen, point(e.x, e.y));
+      pen.down = true;
+      pen.penCursor = true;
+      if (e.pointerType !== "mouse") pen.penCursor = false;
+    });
+
+    window.addEventListener("pointerup", function (e) {
+      if (!e.isPrimary) return;
+      pen.down = false;
+      if (e.pointerType !== "mouse") pen.penCursor = false;
+    });
+
+    return pen;
   }
 
-  // window.addEventListener("touchstart", absorbEvent);
-  // window.addEventListener("touchend", absorbEvent);
-  // window.addEventListener("touchmove", absorbEvent);
-  // window.addEventListener("touchcancel", absorbEvent);
+  // TODO: Merge this logic into the above events & consolidate class properties.
+  // Check the hardware for any changes.
+  poll() {
+    if (this.down) {
+      if (this.penDragging === false) {
+        this.penDragging = true;
 
-  // Add pointer events.
+        this.penDragStartPos = { x: this.x, y: this.y };
+        this.penLastPos = { x: this.x, y: this.y };
 
-  window.addEventListener("pointermove", function (e) {
-    if (!e.isPrimary) return;
-    Object.assign(pen, point(e.x, e.y));
-    penCursor = true;
-    if (e.pointerType !== "mouse") penCursor = false;
-  });
+        this.event = "touch";
+      } else if (this.penDragging === true) {
+        const penDragAmount = {
+          x: this.x - this.penDragStartPos.x,
+          y: this.y - this.penDragStartPos.y,
+        };
 
-  window.addEventListener("pointerdown", function (e) {
-    if (!e.isPrimary) return;
-    Object.assign(pen, point(e.x, e.y));
-    pen.down = true;
-    penCursor = true;
-    if (e.pointerType !== "mouse") penCursor = false;
-  });
+        const penDragDelta = {
+          x: this.x - this.penLastPos.x,
+          y: this.y - this.penLastPos.y,
+        };
 
-  window.addEventListener("pointerup", function (e) {
-    if (!e.isPrimary) return;
-    pen.down = false;
-    if (e.pointerType !== "mouse") penCursor = false;
-  });
+        this.penLastPos = { x: this.x, y: this.y };
 
-  return pen;
-}
+        this.dragBox = {
+          x: this.penDragStartPos.x,
+          y: this.penDragStartPos.y,
+          w: penDragAmount.x,
+          h: penDragAmount.y,
+        };
+        this.dragDelta = penDragDelta;
+        this.lastPos = this.penLastPos;
+        this.event = "draw";
+      }
+    } else if (this.penDragging === true) {
+      this.event = "lift";
+      this.penDragging = false;
+    }
 
-export function input() {
-  if (
-    pen.x !== lastPenX ||
-    pen.y !== lastPenY ||
-    pen.down !== lastPenDown ||
-    penCursor !== lastPenCursor
-  ) {
-    pen.changed = true;
-    lastPenCursor = penCursor;
-    lastPenDown = pen.down;
-    lastPenX = pen.x;
-    lastPenY = pen.y;
-  }
-  // Wait until after rendering to set changed to false, because other render functions may check it.
-}
+    this.isDown = this.penDragging;
 
-export function render({ plot, color }) {
-  if (!cursorCode || cursorCode === "precise") {
-    color(255, 255, 255);
-
-    // Center
-    plot(pen.x, pen.y);
-
-    // Crosshair
-    color(0, 255, 255);
-
-    // Over
-    plot(pen.x, pen.y - 2);
-    plot(pen.x, pen.y - 3);
-    // Under
-    plot(pen.x, pen.y + 2);
-    plot(pen.x, pen.y + 3);
-    // Left
-    plot(pen.x - 2, pen.y);
-    plot(pen.x - 3, pen.y);
-    // Right
-    plot(pen.x + 2, pen.y);
-    plot(pen.x + 3, pen.y);
-  } else if (cursorCode === "tiny") {
-    color(255, 255, 0, 200);
-    plot(pen.x - 1, pen.y);
-    plot(pen.x + 1, pen.y);
-    // plot(pen.x, pen.y);
-    plot(pen.x, pen.y - 1);
-    plot(pen.x, pen.y + 1);
-  } else if (cursorCode === "dot") {
-    // ...
-    color(255, 0, 0, 128);
-    plot(pen.x, pen.y);
-  } else if (cursorCode === "none") {
-    // ...
+    if (
+      this.x !== this.lastPenX ||
+      this.y !== this.lastPenY ||
+      this.down !== this.lastPenDown ||
+      this.penCursor !== this.lastPenCursor
+    ) {
+      this.changed = true;
+      this.lastPenCursor = this.penCursor;
+      this.lastPenDown = this.down;
+      this.lastPenX = this.x;
+      this.lastPenY = this.y;
+    }
+    // TODO: "Wait until after rendering to set changed to false so those functions will check it?" - Why would I *not* do that here?
   }
 
-  pen.changed = false;
-}
+  render({ plot, color }) {
+    const { x, y } = this;
+    if (!this.cursorCode || this.cursorCode === "precise") {
+      color(255, 255, 255);
+      // Center
+      plot(x, y);
+      // Crosshair
+      color(0, 255, 255);
 
-export function setCursorCode(code) {
-  cursorCode = code;
+      // Over
+      plot(x, y - 2);
+      plot(x, y - 3);
+      // Under
+      plot(x, y + 2);
+      plot(x, y + 3);
+      // Left
+      plot(x - 2, y);
+      plot(x - 3, y);
+      // Right
+      plot(x + 2, y);
+      plot(x + 3, y);
+    } else if (this.cursorCode === "tiny") {
+      color(255, 255, 0, 200);
+      plot(x - 1, y);
+      plot(x + 1, y);
+      // plot(pen.x, pen.y);
+      plot(x, y - 1);
+      plot(x, y + 1);
+    } else if (this.cursorCode === "dot") {
+      // ...
+      color(255, 0, 0, 128);
+      plot(x, y);
+    } else if (this.cursorCode === "none") {
+      // ...
+    }
+    this.changed = false;
+  }
+
+  setCursorCode(code) {
+    this.cursorCode = code;
+  }
 }

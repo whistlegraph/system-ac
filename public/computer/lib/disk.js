@@ -1,3 +1,5 @@
+// Disk
+
 import * as graph from "./graph.js";
 import * as num from "./num.js";
 import * as geo from "./geo.js";
@@ -198,10 +200,6 @@ const { load, send } = (() => {
   return { load, send };
 })();
 
-// TODO: Move this into the Pen.js file and make that a class.
-let penDragging = false;
-let penLastPos, penDragStartPos;
-
 // Produce a frame.
 function makeFrame(e) {
   // 1. Beat
@@ -272,46 +270,9 @@ function makeFrame(e) {
     $api.cursor = (code) => (cursorCode = code);
 
     // Bring in pen data and figure out what dragging event we are in.
-    $api.pen = e.data.pen;
-    const pen = $api.pen;
-
-    // TODO: All this should move to Pen and get sent over in the frame.
-    if (pen.changed) {
-      if (pen.down) {
-        if (penDragging === false) {
-          penDragging = true;
-
-          penDragStartPos = { x: pen.x, y: pen.y };
-          penLastPos = { x: pen.x, y: pen.y };
-
-          pen.event = "down";
-        } else if (penDragging === true) {
-          const penDragAmount = {
-            x: pen.x - penDragStartPos.x,
-            y: pen.y - penDragStartPos.y,
-          };
-          const penDragDelta = {
-            x: pen.x - penLastPos.x,
-            y: pen.y - penLastPos.y,
-          };
-
-          penLastPos = { x: pen.x, y: pen.y };
-
-          pen.dragAmount = penDragAmount;
-          pen.dragDelta = penDragDelta;
-
-          pen.dragStartPos = penDragStartPos;
-          pen.lastPos = penLastPos;
-
-          pen.event = "drawing";
-        }
-      } else if (penDragging === true) {
-        pen.event = "up";
-        penDragging = false;
-      }
-    }
-
-    pen.is = (is) => pen.event === is;
+    const pen = e.data.pen;
+    pen.did = (did) => pen.event === did;
+    $api.pen = pen;
 
     // $api.updateMetronome = e.data.updateMetronome;
 
