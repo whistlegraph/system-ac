@@ -41,19 +41,29 @@ export function lerp(a, b, amount) {
   return a + (b - a) * clamp(amount, 0, 1);
 }
 
-// Wraps a single lerped value into a class.
+// A. Lerps over a single value (from->to) via `progress` (0->1).
+// B. Quantizes over an array of individual `values` via `progress` (0->1).
+// TODO: Allow `progress` to be 0->N which would map to an index in `values`.
 export class Track {
-  #from;
-  #to;
+  #values;
   #result;
+  #quantize;
 
-  constructor(from, to, result) {
-    this.#from = from;
-    this.#to = to;
+  constructor(values, result) {
+    this.#values = values;
     this.#result = result;
+    this.#quantize = Array.isArray(values);
   }
 
   step(progress) {
-    this.#result(lerp(this.#from, this.#to, progress));
+    if (this.#quantize) {
+      const index = Math.min(
+        Math.floor(progress * this.#values.length),
+        this.#values.length - 1
+      );
+      this.#result(this.#values[index]);
+    } else {
+      this.#result(lerp(this.#values.from, this.#values.to, progress));
+    }
   }
 }

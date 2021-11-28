@@ -36,6 +36,7 @@ const $commonApi = {
   },
   help: {
     choose: help.choose,
+    repeat: help.repeat,
     every: help.every,
     any: help.any,
     each: help.each,
@@ -214,6 +215,7 @@ function makeFrame({ data: { type, content } }) {
 
     $api.sound = {
       time: content.time,
+      bp: content.beatProgress,
       bpm: function (newBPM) {
         if (newBPM) {
           content.bpm[0] = newBPM;
@@ -264,7 +266,7 @@ function makeFrame({ data: { type, content } }) {
       Object.assign($api, $commonApi);
       Object.assign($api, $updateApi);
 
-      $api.sound = { time: content.audioTime };
+      $api.sound = { time: content.audioTime, bpm: content.audioBpm };
 
       // Don't pass pixels to updates.
       $api.screen = {
