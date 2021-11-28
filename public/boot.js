@@ -1,9 +1,11 @@
 // Jeffrey's in-Project Notes
 // See also: https://www.notion.so/whistlegraph/9abf76a4437a46199087176bd06657ea?v=98b5d3a8965e47d9a4c177dd5147960d
 
-// Rename "stage" and refactor it.
-
 // Add system font / main terminal?
+
+// Refactor all of "Stage" with future tasks in mind.
+// * Eliminate dead code.
+// * Simplify existing code.
 
 // After Oliver + Mija:
 
