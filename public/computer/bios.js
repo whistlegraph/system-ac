@@ -241,6 +241,7 @@ async function boot(
         type: "beat",
         content: {
           time,
+          beatProgress: 100,
           bpm: sound.bpm,
         },
       },
@@ -279,6 +280,7 @@ async function boot(
           needsRender,
           updateCount,
           audioTime: audioContext?.currentTime,
+          audioBpm: sound.bpm[0],
           pixels: screen.pixels.buffer,
           width: canvas.width,
           height: canvas.height,

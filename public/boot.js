@@ -1,8 +1,6 @@
 // Jeffrey's in-Project Notes
 // See also: https://www.notion.so/whistlegraph/9abf76a4437a46199087176bd06657ea?v=98b5d3a8965e47d9a4c177dd5147960d
 
-// Add better "anticipation".
-
 // Rename "stage" and refactor it.
 
 // Add system font / main terminal?
@@ -47,16 +45,22 @@
 // TODO: Ink types? ... can they be procedural using a buffer?
 // TODO: Fix Firefox: https://bugzilla.mozilla.org/show_bug.cgi?id=1247687
 
+// TODO: Make my first generative disk / piece and mint it.
+
 // DONE
 
 import { boot } from "./computer/bios.js";
 
-// const host = "disks.aesthetic.computer";
-const host = `${window.location.hostname}:8081`;
+let host;
+
+if (window.location.hostname === "aesthetic.computer") {
+  host = "disks.aesthetic.computer"; // Production
+} else {
+  host = `${window.location.hostname}:8081`; // Development
+}
+
 const bpm = 120;
 const debug = true;
-
-// TODO: Make my first generative disk / piece and mint it.
 
 if (window.location.hash === "#pull") {
   // boot("pull", bpm, host, undefined, debug);

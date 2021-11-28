@@ -21,3 +21,8 @@ export function any(obj) {
 export function each(obj, fn) {
   Object.entries(obj).forEach(([key, obj]) => fn(obj, key));
 }
+
+// Run a function `n` times, passing in `i` on each iteration.
+export function repeat(n, fn) {
+  for (let i = 0; i < n; i += 1) fn(i);
+}
