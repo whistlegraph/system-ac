@@ -1,4 +1,4 @@
-// Disk
+// 👩‍💻 Disk
 
 import * as graph from "./graph.js";
 import * as num from "./num.js";
@@ -7,17 +7,16 @@ import * as help from "./help.js";
 
 let boot = () => false;
 let sim = () => false;
-// let paint = () => false;
 let paint = ($) => $.noise16();
 let beat = () => false;
-// let query = ""; // Passing in original URL parameters.
+let act = ($) => false;
 
 let loading = false;
 let reframe;
 let cursorCode;
 let paintCount = 0n;
 
-// 👩‍💻 Disk API
+// 1. API
 
 // For every function to access.
 const $commonApi = {
@@ -131,7 +130,7 @@ const $paintApi = {
   SQUARE,
 };
 
-// Load the disk.
+// 2. Loading the disk.
 const { load, send } = (() => {
   let loadUrlCount = 1;
   let loadHost;
@@ -158,11 +157,12 @@ const { load, send } = (() => {
     // Artificially imposed loading by at least 1/4 sec.
     setTimeout(() => {
       paintCount = 0n;
-      boot = module.boot;
-      sim = module.sim;
-      paint = module.paint;
-      beat = module.beat;
-      //query = search;
+      // Redefine the default event functions if they exist in the module.
+      boot = module.boot || boot;
+      sim = module.sim || sim;
+      paint = module.paint || paint;
+      beat = module.beat || beat;
+      act = module.act || act;
       $commonApi.query = search;
       $updateApi.load = load;
       loading = false;
@@ -200,21 +200,25 @@ const { load, send } = (() => {
   return { load, send };
 })();
 
-// Produce a frame.
-function makeFrame(e) {
-  // 1. Beat
-  if (e.data.needsBeat) {
+// 3. Produce a frame.
+// Boot procedure:
+// The first `paint` happens after `boot`, then updates happen every frame
+// before painting.
+// TODO: Finish organizing e into e.data.type and e.data.content.
+function makeFrame({ data: { type, content } }) {
+  // 1. Beat // One send (returns afterwards)
+  if (type === "beat") {
     const $api = {};
     Object.assign($api, $commonApi);
     $api.graph = $paintApi; // TODO: Should this eventually be removed?
 
     $api.sound = {
-      time: e.data.time,
+      time: content.time,
       bpm: function (newBPM) {
         if (newBPM) {
-          e.data.bpm[0] = newBPM;
+          content.bpm[0] = newBPM;
         }
-        return e.data.bpm[0];
+        return content.bpm[0];
       },
     };
 
@@ -233,8 +237,8 @@ function makeFrame(e) {
       squares.push({ tone, beats, attack, decay, volume, pan });
 
       // Return a progress function so it can be used by rendering.
-      const seconds = (60 / e.data.bpm) * beats;
-      const end = e.data.time + seconds;
+      const seconds = (60 / content.bpm) * beats;
+      const end = content.time + seconds;
       return {
         progress: function (time) {
           return 1 - Math.max(0, end - time) / seconds;
@@ -244,128 +248,127 @@ function makeFrame(e) {
 
     beat($api);
 
-    send({ bpm: e.data.bpm, squares }, [e.data.bpm]);
+    send({ type: "beat", content: { bpm: content.bpm, squares } }, [
+      content.bpm,
+    ]);
 
     squares.length = 0;
-
-    return;
   }
 
-  // 2. Update
-  if (e.data.updateCount > 0 && paintCount > 0n) {
-    const $api = {};
-    Object.assign($api, $commonApi);
-    Object.assign($api, $updateApi);
+  // 2. Frame
+  else if (type === "frame") {
+    // 1. Hardware
 
-    $api.sound = {
-      time: e.data.audioTime,
-    };
+    {
+      const $api = {};
+      Object.assign($api, $commonApi);
+      Object.assign($api, $updateApi);
 
-    // Don't pass pixels to updates.
-    $api.screen = {
-      width: e.data.width,
-      height: e.data.height,
-    };
+      $api.sound = { time: content.audioTime };
 
-    $api.cursor = (code) => (cursorCode = code);
+      // Don't pass pixels to updates.
+      $api.screen = {
+        width: content.width,
+        height: content.height,
+      };
 
-    // Bring in pen data and figure out what dragging event we are in.
-    const pen = e.data.pen;
-    pen.did = (did) => pen.event === did;
-    $api.pen = pen;
+      $api.cursor = (code) => (cursorCode = code);
 
-    // $api.updateMetronome = e.data.updateMetronome;
+      // Ingest all pen input events by running act for each event.
+      content.pen.forEach((data) => {
+        Object.assign(data, { device: "pen", is: (e) => e === data.name });
+        $api.event = data;
+        act($api);
+      });
 
-    // Update the number of times that are needed.
-    for (let i = e.data.updateCount; i--; ) {
-      sim($api);
+      // TODO: Also process keyboard events. 2021.11.27.16.48
+
+      delete $api.event;
+
+      // Update // no send
+      if (content.updateCount > 0 && paintCount > 0n) {
+        // Update the number of times that are needed.
+        for (let i = content.updateCount; i--; ) sim($api);
+      }
     }
-  }
 
-  // 3. Render
-  if (e.data.needsRender) {
-    const $api = {};
-    Object.assign($api, $commonApi);
-    Object.assign($api, $paintApi);
-    $api.paintCount = Number(paintCount);
+    // Render // Two sends (Move one send up eventually? -- 2021.11.27.17.20)
+    if (content.needsRender) {
+      const $api = {};
+      Object.assign($api, $commonApi);
+      Object.assign($api, $paintApi);
+      $api.paintCount = Number(paintCount);
 
-    let pixels = new ImageData(
-      new Uint8ClampedArray(e.data.pixels), // Is this the only necessary part?
-      e.data.width,
-      e.data.height
-    );
+      let pixels = new ImageData(
+        new Uint8ClampedArray(content.pixels), // Is this the only necessary part?
+        content.width,
+        content.height
+      );
 
-    const screen = {
-      pixels: pixels.data,
-      width: e.data.width,
-      height: e.data.height,
-    };
+      const screen = {
+        pixels: pixels.data,
+        width: content.width,
+        height: content.height,
+      };
 
-    $api.screen = screen;
+      $api.screen = screen;
 
-    $api.resize = function (width, height) {
-      // Don't do anything if there is no change.
-      if (screen.width === width && screen.height === height) return;
+      $api.resize = function (width, height) {
+        // Don't do anything if there is no change.
+        if (screen.width === width && screen.height === height) return;
 
-      screen.width = width;
-      screen.height = height;
-      screen.pixels = new Uint8ClampedArray(screen.width * screen.height * 4);
+        screen.width = width;
+        screen.height = height;
+        screen.pixels = new Uint8ClampedArray(screen.width * screen.height * 4);
+        graph.setBuffer(screen);
+        reframe = { width, height };
+      };
+
+      $api.cursor = (code) => (cursorCode = code);
+      $api.pen = content.pen;
+
       graph.setBuffer(screen);
-      reframe = { width, height };
-    };
 
-    $api.cursor = (code) => (cursorCode = code);
-    $api.pen = e.data.pen;
+      // Clear depthBuffer. TODO: This should only be for 3D?
+      graph.depthBuffer.length = screen.width * screen.height;
+      for (let i = 0; i < graph.depthBuffer.length; i += 1) {
+        graph.depthBuffer[i] = Number.MAX_VALUE;
+      }
 
-    graph.setBuffer(screen);
+      // Run boot only once before painting for the first time.
+      if (paintCount === 0n) boot($api);
 
-    // Clear depthBuffer. TODO: This should only be for 3D?
-    graph.depthBuffer.length = screen.width * screen.height;
-    for (let i = 0; i < graph.depthBuffer.length; i += 1) {
-      graph.depthBuffer[i] = Number.MAX_VALUE;
-    }
+      // Paint a frame, which can return false to enable caching via paintChained and by
+      // default returns undefined. -- Is this really what I want? 2021.11.27.16.20
+      const paintChanged = paint($api) === false ? false : true;
 
-    if (paintCount === 0n) {
-      boot($api);
-    }
+      // Return frame data back to the main thread.
+      const sendData = { pixels: screen.pixels };
 
-    const paintResult = paint($api);
-    let paintChanged;
+      // Optional messages to send.
+      if (paintChanged === true) sendData.paintChanged = true;
+      if (loading === true) sendData.loading = true;
 
-    if (paintResult === false) {
-      paintChanged = false;
+      // These fields are one time `signals`.
+      if (reframe) sendData.reframe = reframe;
+      if (cursorCode) sendData.cursorCode = cursorCode;
+
+      send({ type: "render", content: sendData }, [screen.pixels]);
+
+      paintCount = paintCount + 1n;
+
+      // Flush the `signals` after sending.
+      if (reframe) reframe = undefined;
+      if (cursorCode) cursorCode = undefined;
     } else {
-      paintChanged = true;
+      // Send update.
+      send(
+        {
+          type: "update",
+          content: { pixels: content.pixels, didntRender: true, loading },
+        },
+        [content.pixels]
+      );
     }
-
-    // Return frame data back to the main thread.
-    const sendData = {
-      pixels: screen.pixels,
-    };
-
-    // Optional messages to send.
-    if (paintChanged === true) sendData.paintChanged = true;
-    if (loading === true) sendData.loading = true;
-    if (reframe) sendData.reframe = reframe;
-    if (cursorCode) sendData.cursorCode = cursorCode;
-
-    send(sendData, [screen.pixels]);
-
-    paintCount = paintCount + 1n;
-
-    // TODO: How to reframe without having to redraw, or redraw if reframe
-    // occurs?
-    if (reframe) {
-      reframe = undefined;
-    }
-
-    if (cursorCode) {
-      cursorCode = undefined;
-    }
-  } else {
-    // Send update.
-    send({ pixels: e.data.pixels, didntRender: true, loading }, [
-      e.data.pixels,
-    ]);
   }
 }

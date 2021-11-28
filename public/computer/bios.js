@@ -210,10 +210,12 @@ async function boot(
       // Sound
       startSound(); // This runs disk.beat
 
+      // TODO: Stop using polling.
+
       // ➰ Core Loops for User Input, Music, Object Updates, and Rendering
       Loop.start(
         () => {
-          pen.poll();
+          // pen.poll();
           // TODO: Key.input();
           // TODO: Voice.input();
         },
@@ -236,25 +238,25 @@ async function boot(
   function requestBeat(time) {
     send(
       {
-        needsBeat: true,
-        time,
-        bpm: sound.bpm,
+        type: "beat",
+        content: {
+          time,
+          bpm: sound.bpm,
+        },
       },
       [sound.bpm] // TODO: Why not just send the number here?
     );
   }
 
-  function receivedBeat(e) {
+  function receivedBeat(content) {
     // BPM
-    if (sound.bpm[0] !== e.data.bpm[0]) {
-      sound.bpm = new Float32Array(e.data.bpm);
+    if (sound.bpm[0] !== content.bpm[0]) {
+      sound.bpm = new Float32Array(content.bpm);
       updateMetronome(sound.bpm[0]);
     }
 
     // SQUARE
-    for (const square of e.data.squares) {
-      updateSquare(square);
-    }
+    for (const square of content.squares) updateSquare(square);
   }
 
   // Update & Render
@@ -269,6 +271,24 @@ async function boot(
 
     startTime = performance.now();
 
+    // Build the data to send back to the disk thread.
+    send(
+      {
+        type: "frame",
+        content: {
+          needsRender,
+          updateCount,
+          audioTime: audioContext?.currentTime,
+          pixels: screen.pixels.buffer,
+          width: canvas.width,
+          height: canvas.height,
+          pen: pen.events, // TODO: Should store an array of states that get ingested by the worker.
+          //updateMetronome,
+        },
+      },
+      [screen.pixels.buffer]
+    );
+
     // Time budgeting stuff...
     //const updateDelta = performance.now() - updateNow;
     //console.log("Update Budget: ", Math.round((updateDelta / updateRate) * 100));
@@ -279,42 +299,31 @@ async function boot(
     //console.log("Render Budget: ", Math.round((renderDelta / renderRate) * 100));
     // TODO: Output this number graphically.
 
-    // makeFrame
-    send(
-      {
-        needsRender,
-        updateCount,
-        audioTime: audioContext?.currentTime,
-        pixels: screen.pixels.buffer,
-        width: canvas.width,
-        height: canvas.height,
-        pen,
-        //updateMetronome,
-      },
-      [screen.pixels.buffer]
-    );
+    // Clear pen events.
+    pen.events.length = 0;
   }
 
   let frameCached = false;
   let pixelsDidChange = false; // Can this whole thing be removed?
 
-  function receivedChange(e) {
+  // TODO: Organize e into e.data.type and e.data.content.
+  function receivedChange({ data: { type, content } }) {
     // Route to received beat if this change is not a frame update.
-    if (e.data.bpm) {
-      receivedBeat(e);
+    if (type === "beat") {
+      receivedBeat(content);
       return;
     }
 
     // Check for a change in resolution.
-    if (e.data.reframe) {
+    if (content.reframe) {
       // Reframe the captured pixels.
-      frame(e.data.reframe.width, e.data.reframe.height);
+      frame(content.reframe.width, content.reframe.height);
     }
 
     // Grab the pixels.
     // TODO: Use BitmapData objects to make this faster once it lands in Safari.
     imageData = new ImageData(
-      new Uint8ClampedArray(e.data.pixels), // Is this the only necessary part?
+      new Uint8ClampedArray(content.pixels), // Is this the only necessary part?
       canvas.width,
       canvas.height
     );
@@ -323,19 +332,19 @@ async function boot(
 
     frameAlreadyRequested = false;
 
-    if (e.data.cursorCode) pen.setCursorCode(e.data.cursorCode);
+    if (content.cursorCode) pen.setCursorCode(content.cursorCode);
 
-    if (e.data.didntRender === true) return;
+    if (content.didntRender === true) return;
 
     Graph.setBuffer(screen); // Why does screen exist here?
 
-    pixelsDidChange = e.data.paintChanged || false;
+    pixelsDidChange = content.paintChanged || false;
 
     if (pixelsDidChange || pen.changed) {
       frameCached = false;
 
       pen.render(Graph);
-      if (e.data.loading === true && debug === true) UI.spinner(Graph);
+      if (content.loading === true && debug === true) UI.spinner(Graph);
 
       ctx.putImageData(imageData, 0, 0);
     } else if (frameCached === false) {
@@ -347,7 +356,7 @@ async function boot(
         Graph.line(6, 3, 6, 9);
         ctx.putImageData(imageData, 0, 0);
       }
-    } else if (e.data.loading === true && debug === true) {
+    } else if (content.loading === true && debug === true) {
       UI.spinner(Graph);
       ctx.putImageData(imageData, 0, 0);
     }

@@ -49,16 +49,14 @@ export { makeBuffer, setBuffer, depthBuffer, color };
 // 2. 2D Drawing
 
 function clear() {
-  /*
-                  // Note: I believe this would be the fastest method but would have to test it.
-                  // Would have to copy up by doubling until we hit the length!
-                  pixels[0] = 255;
-                  pixels[1] = 255;
-                  pixels[2] = 255;
-                  pixels[3] = 255;
-                
-                  pixels.copyWithin(4, 0);
-                  */
+  // Note: I believe this would be the fastest method but would have to test it.
+  // Would have to copy up by doubling until we hit the length!
+  // pixels[0] = 255;
+  // pixels[1] = 255;
+  // pixels[2] = 255;
+  // pixels[3] = 255;
+  // pixels.copyWithin(4, 0);
+
   for (let i = 0; i < pixels.length; i += 4) {
     pixels[i] = c[0]; // r
     pixels[i + 1] = c[1]; // g
@@ -460,7 +458,6 @@ class Form {
     for (let i = 0; i < this.indices.length; i += 3) {
       // Draw each triangle by applying the screen transform &
       // perspective divide (with clipping).
-      // console.log("TRIANGLE", i);
       drawTriangle(
         transformedVertices[i],
         transformedVertices[i + 1],

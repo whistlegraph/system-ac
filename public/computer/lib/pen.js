@@ -1,30 +1,31 @@
-// ✍️Pen
+// ✍️ Pen
 
 // TODO: Clean up this whole class and its connections to the system.
 
 export class Pen {
   x;
   y;
+  delta;
+
   down = false;
   changed = false;
+
+  event = "";
+  events = [];
 
   cursorCode;
   penCursor = false;
 
   lastPenX;
   lastPenY;
-  lastPenDown;
+
   lastPenCursor;
 
-  penDragging = false;
-
-  isDown = false;
-
-  penLastPos;
-
-  penDragStartPos;
-
   dragBox;
+
+  #dragging = false;
+  #lastPenDown;
+  #penDragStartPos;
 
   constructor(point) {
     // Prevent touch events from scrolling the page.
@@ -37,24 +38,55 @@ export class Pen {
     // Add pointer events.
     const pen = this;
 
-    window.addEventListener("pointermove", function (e) {
-      if (!e.isPrimary) return;
-      Object.assign(pen, point(e.x, e.y));
-      pen.penCursor = true;
-      if (e.pointerType !== "mouse") pen.penCursor = false;
-    });
-
+    // touch
     window.addEventListener("pointerdown", function (e) {
       if (!e.isPrimary) return;
       Object.assign(pen, point(e.x, e.y));
       pen.down = true;
+      pen.#dragging = true;
+      pen.#penDragStartPos = { x: pen.x, y: pen.y };
+      pen.#event("touch");
       pen.penCursor = true;
       if (e.pointerType !== "mouse") pen.penCursor = false;
     });
 
+    // hover and draw
+    window.addEventListener("pointermove", function (e) {
+      if (!e.isPrimary) return;
+      Object.assign(pen, point(e.x, e.y));
+
+      // draw
+      if (pen.#dragging) {
+        const penDragAmount = {
+          x: pen.x - pen.#penDragStartPos.x,
+          y: pen.y - pen.#penDragStartPos.y,
+        };
+
+        pen.dragBox = {
+          x: pen.#penDragStartPos.x,
+          y: pen.#penDragStartPos.y,
+          w: penDragAmount.x,
+          h: penDragAmount.y,
+        };
+
+        // TODO: Only set to draw if
+        pen.#event("draw");
+      } // TODO: else { ... } // hover
+
+      pen.penCursor = true;
+      if (e.pointerType !== "mouse") pen.penCursor = false;
+    });
+
+    // lift
     window.addEventListener("pointerup", function (e) {
       if (!e.isPrimary) return;
       pen.down = false;
+      if (pen.#dragging) {
+        pen.#event("lift");
+      }
+      pen.#dragging = false;
+
+      pen.penCursor = true;
       if (e.pointerType !== "mouse") pen.penCursor = false;
     });
 
@@ -63,58 +95,29 @@ export class Pen {
 
   // TODO: Merge this logic into the above events & consolidate class properties.
   // Check the hardware for any changes.
-  poll() {
-    if (this.down) {
-      if (this.penDragging === false) {
-        this.penDragging = true;
+  #event(name) {
+    this.event = name;
 
-        this.penDragStartPos = { x: this.x, y: this.y };
-        this.penLastPos = { x: this.x, y: this.y };
+    const delta = {
+      x: this.x - this.lastPenX,
+      y: this.y - this.lastPenY,
+    };
 
-        this.event = "touch";
-      } else if (this.penDragging === true) {
-        const penDragAmount = {
-          x: this.x - this.penDragStartPos.x,
-          y: this.y - this.penDragStartPos.y,
-        };
+    this.delta = delta;
+    this.changed = true;
 
-        const penDragDelta = {
-          x: this.x - this.penLastPos.x,
-          y: this.y - this.penLastPos.y,
-        };
+    this.events.push({
+      name: this.event,
+      x: this.x,
+      y: this.y,
+      delta,
+      drag: this.dragBox,
+    });
 
-        this.penLastPos = { x: this.x, y: this.y };
-
-        this.dragBox = {
-          x: this.penDragStartPos.x,
-          y: this.penDragStartPos.y,
-          w: penDragAmount.x,
-          h: penDragAmount.y,
-        };
-        this.dragDelta = penDragDelta;
-        this.lastPos = this.penLastPos;
-        this.event = "draw";
-      }
-    } else if (this.penDragging === true) {
-      this.event = "lift";
-      this.penDragging = false;
-    }
-
-    this.isDown = this.penDragging;
-
-    if (
-      this.x !== this.lastPenX ||
-      this.y !== this.lastPenY ||
-      this.down !== this.lastPenDown ||
-      this.penCursor !== this.lastPenCursor
-    ) {
-      this.changed = true;
-      this.lastPenCursor = this.penCursor;
-      this.lastPenDown = this.down;
-      this.lastPenX = this.x;
-      this.lastPenY = this.y;
-    }
-    // TODO: "Wait until after rendering to set changed to false so those functions will check it?" - Why would I *not* do that here?
+    this.lastPenCursor = this.penCursor;
+    this.#lastPenDown = this.down;
+    this.lastPenX = this.x;
+    this.lastPenY = this.y;
   }
 
   render({ plot, color }) {
