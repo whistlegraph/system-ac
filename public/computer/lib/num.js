@@ -3,6 +3,11 @@ import { vec4, mat4 } from "../dep/gl-matrix/index.js";
 
 export { vec4, mat4 };
 
+// Returns true if the number is even, and false otherwise.
+export function even(n) {
+  return n % 2 === 0;
+}
+
 // Accepts integer from 0–16
 // Yields 17 different values between 0–255.
 export function byteInterval17(i16) {

@@ -1,4 +1,13 @@
-import { randInt, byteInterval17, mat4, vec4, radians, lerp } from "./num.js";
+import {
+  randInt,
+  byteInterval17,
+  mat4,
+  vec4,
+  even,
+  radians,
+  lerp,
+} from "./num.js";
+const { floor } = Math;
 
 let width, height, pixels;
 const depthBuffer = [];
@@ -38,10 +47,10 @@ function setBuffer(buffer) {
 }
 
 function color(r, g, b, a = 255) {
-  c[0] = r;
-  c[1] = g;
-  c[2] = b;
-  c[3] = a;
+  c[0] = floor(r);
+  c[1] = floor(g);
+  c[2] = floor(b);
+  c[3] = floor(a);
 }
 
 export { makeBuffer, setBuffer, depthBuffer, color };
@@ -167,8 +176,10 @@ function line(x0, y0, x1, y1) {
 
 // Takes in x, y, width and height and draws an
 // outline, inline (1px) or filled rectangle, optionally
-// from the center by inputting eg: "inlineCenter" in mode.
+// from the center by inputting eg: "inline*center" in mode.
 const BOX_CENTER = "*center";
+// box [...or any object with x, y, w, h properties] (1)
+// box, mode (2)
 // x, y, size (3)
 // x, y, w, h (4)
 // x, y, size, mode (4)
@@ -180,7 +191,20 @@ function box() {
     h,
     mode = "fill";
 
-  if (arguments.length === 3) {
+  if (arguments.length === 1) {
+    // box
+    x = arguments[0].x;
+    y = arguments[0].y;
+    w = arguments[0].w;
+    h = arguments[0].h;
+  } else if (arguments.length === 2) {
+    // box, mode
+    x = arguments[0].x;
+    y = arguments[0].y;
+    w = arguments[0].w;
+    h = arguments[0].h;
+    mode = arguments[1];
+  } else if (arguments.length === 3) {
     // x, y, size
     x = arguments[0];
     y = arguments[1];
@@ -244,6 +268,58 @@ function box() {
   }
 }
 
+// Renders a square grid at x, y given cols, rows, and scale.
+// TODO: Add color adjustment / inherit global color.
+function grid({
+  box: { x, y, w: cols, h: rows },
+  scale,
+  squareCenter: offset,
+}) {
+  const storedColor = c.slice(); // Remember color.
+
+  const w = cols * scale;
+  const h = rows * scale;
+
+  // Plot a point in each of the four corners.
+  const right = x + w - 1,
+    bottom = y + h - 1;
+
+  // TODO: Where to add currying back into this API so I can do color().plot().plot() 2021.12.06.21.32
+  // - Make the API object here in this file and wrap the functions as curries?
+
+  color(64, 64, 64);
+  plot(x, y);
+  plot(right, y);
+  plot(x, bottom);
+  plot(right, bottom);
+  color(...storedColor);
+
+  // Draw each grid square, with optional center points.
+  const colPix = floor(w / cols),
+    rowPix = floor(h / rows);
+
+  for (let i = 0; i < cols; i += 1) {
+    const plotX = x + colPix * i;
+
+    for (let j = 0; j < rows; j += 1) {
+      const plotY = y + rowPix * j;
+
+      // Lightly shade this grid square, alternating tint on evens and odds.
+      color(c[0], c[1], c[2], even(i + j) ? 50 : 75);
+      box(plotX, plotY, scale);
+
+      // TODO: Turn this into a generic drawing function? 2021.12.06.21.27
+      // Render exact center point of this grid square if it exists mathematically.
+      if (offset > 0) {
+        color(c[0], c[1], c[2], 100);
+        plot(plotX + offset, plotY + offset);
+      }
+    }
+  }
+
+  color(...storedColor); // Restore color.
+}
+
 function noise16() {
   for (let i = 0; i < pixels.length; i += 4) {
     pixels[i] = byteInterval17(randInt(16)); // r
@@ -253,7 +329,7 @@ function noise16() {
   }
 }
 
-export { clear, plot, copy, paste, line, box, noise16 };
+export { clear, plot, copy, paste, line, box, grid, noise16 };
 
 // 3. 3D Drawing (Kinda mixed with some 2D)
 

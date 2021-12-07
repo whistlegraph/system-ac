@@ -306,7 +306,7 @@ async function boot(
   }
 
   let frameCached = false;
-  let pixelsDidChange = false; // Can this whole thing be removed?
+  let pixelsDidChange = false; // TODO: Can this whole thing be removed? 2021.11.28.03.50
 
   // TODO: Organize e into e.data.type and e.data.content.
   function receivedChange({ data: { type, content } }) {
@@ -351,13 +351,15 @@ async function boot(
       ctx.putImageData(imageData, 0, 0);
     } else if (frameCached === false) {
       frameCached = true;
-      // Pause
+      pen.render(Graph);
       if (debug) {
+        // Draw the pause icon in the top left.
+        // TODO: How to I use my actual API in here? 2021.11.28.04.00
         Graph.color(0, 255, 255);
         Graph.line(3, 3, 3, 9);
         Graph.line(6, 3, 6, 9);
-        ctx.putImageData(imageData, 0, 0);
       }
+      ctx.putImageData(imageData, 0, 0);
     } else if (content.loading === true && debug === true) {
       UI.spinner(Graph);
       ctx.putImageData(imageData, 0, 0);

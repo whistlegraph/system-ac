@@ -16,6 +16,8 @@ let reframe;
 let cursorCode;
 let paintCount = 0n;
 
+let penX, penY;
+
 // 1. API
 
 // For every function to access.
@@ -33,6 +35,7 @@ const $commonApi = {
   },
   geo: {
     Box: geo.Box,
+    Grid: geo.Grid,
   },
   help: {
     choose: help.choose,
@@ -77,8 +80,8 @@ const TRIANGLE = {
   indices: [0, 1, 2],
 };
 
-// Inputs: RGB, RGBA or an array of those, a single number for grayscale
-// and an object with properties from which it will randomly pick one.
+// Inputs: (r, g, b), (r, g, b, a) or an array of those.
+//         (rgb) for grayscale or (rgb, a) for grayscale with alpha.
 function ink() {
   let args = arguments;
 
@@ -87,9 +90,7 @@ function ink() {
     const isArray = () => Array.isArray(args[0]);
 
     // If it's an object then randomly pick a value & re-run.
-    if (!isNumber() && !isArray()) {
-      return ink(help.any(args[0]));
-    }
+    if (!isNumber() && !isArray()) return ink(help.any(args[0]));
 
     // If single argument is a number then replicate it across the first 3 fields.
     if (isNumber()) {
@@ -99,6 +100,9 @@ function ink() {
       // Or if it's an array, then spread it out.
       args = args[0];
     }
+  } else if (args.length === 2) {
+    // rgb, a
+    args = [arguments[0], arguments[0], arguments[0], arguments[1]];
   }
 
   graph.color(...args);
@@ -120,9 +124,16 @@ const $paintApi = {
   },
   copy: graph.copy,
   paste: graph.paste,
-  plot: graph.plot,
+  plot: function () {
+    graph.plot(...arguments);
+    return $paintApi;
+  },
   line: graph.line,
   box: graph.box,
+  grid: function () {
+    graph.grid(...arguments);
+    return $paintApi;
+  },
   noise16: graph.noise16,
   // 3D
   Camera: graph.Camera,
@@ -279,6 +290,8 @@ function makeFrame({ data: { type, content } }) {
       // Ingest all pen input events by running act for each event.
       content.pen.forEach((data) => {
         Object.assign(data, { device: "pen", is: (e) => e === data.name });
+        penX = data.x;
+        penY = data.y;
         $api.event = data;
         act($api);
       });
@@ -327,7 +340,7 @@ function makeFrame({ data: { type, content } }) {
       };
 
       $api.cursor = (code) => (cursorCode = code);
-      $api.pen = content.pen;
+      $api.pen = { x: penX, y: penY };
 
       graph.setBuffer(screen);
 

@@ -41,11 +41,15 @@ export class Pen {
     // touch
     window.addEventListener("pointerdown", function (e) {
       if (!e.isPrimary) return;
+
       Object.assign(pen, point(e.x, e.y));
+
       pen.down = true;
       pen.#dragging = true;
       pen.#penDragStartPos = { x: pen.x, y: pen.y };
       pen.#event("touch");
+
+      pen.changed = true;
       pen.penCursor = true;
       if (e.pointerType !== "mouse") pen.penCursor = false;
     });
@@ -53,10 +57,10 @@ export class Pen {
     // hover and draw
     window.addEventListener("pointermove", function (e) {
       if (!e.isPrimary) return;
+
       Object.assign(pen, point(e.x, e.y));
 
-      // draw
-      if (pen.#dragging) {
+      if (pen.#dragging) { // draw
         const penDragAmount = {
           x: pen.x - pen.#penDragStartPos.x,
           y: pen.y - pen.#penDragStartPos.y,
@@ -71,8 +75,11 @@ export class Pen {
 
         // TODO: Only set to draw if
         pen.#event("draw");
-      } // TODO: else { ... } // hover
+      } else { // move
+        pen.#event("move");
+      }
 
+      pen.changed = true;
       pen.penCursor = true;
       if (e.pointerType !== "mouse") pen.penCursor = false;
     });
@@ -80,12 +87,13 @@ export class Pen {
     // lift
     window.addEventListener("pointerup", function (e) {
       if (!e.isPrimary) return;
+
       pen.down = false;
-      if (pen.#dragging) {
-        pen.#event("lift");
-      }
+      if (pen.#dragging) pen.#event("lift");
+
       pen.#dragging = false;
 
+      pen.changed = true;
       pen.penCursor = true;
       if (e.pointerType !== "mouse") pen.penCursor = false;
     });
@@ -104,7 +112,6 @@ export class Pen {
     };
 
     this.delta = delta;
-    this.changed = true;
 
     this.events.push({
       name: this.event,

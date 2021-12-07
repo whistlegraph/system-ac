@@ -1,13 +1,31 @@
 // Jeffrey's in-Project Notes
 // See also: https://www.notion.so/whistlegraph/9abf76a4437a46199087176bd06657ea?v=98b5d3a8965e47d9a4c177dd5147960d
 
-// Add system font / main terminal?
+// Current: Add system font / main terminal? (Working in "plot").
 
 // Refactor all of "Stage" with future tasks in mind.
 // * Eliminate dead code.
 // * Simplify existing code.
 
 // After Oliver + Mija:
+
+// TODO: What crypto-currency / web3.js lib do I hook this thing up to for minting, etc?
+
+// TODO: Allow disk servers to exist for live-reloading:
+// - Implement a small server in the disks repository.
+// - Use server sent events: https://stackoverflow.com/a/60117990
+// - Eventually this repository can be cloned to give someone a server.
+// - It's possible that a file system could exist on that server...
+
+// TODO: Make a filesystem?
+// Make a "mint" command.
+
+// TODO: Make a video-recording app that generates 3 letter codes? - to augment
+// my hand-written notes and pages.
+
+// TODO: Make a whistlegraph notes app where I can record and stop recording and
+//  play lines back with audio or just make static lines and marks -- maybe it's
+//  a special brush?
 
 // TODO: What is the best way to publish or generate the API documentation tree
 // as a cheatsheet... and simultaneously have it available in my editor.
@@ -69,6 +87,12 @@ if (window.location.hash === "#pull") {
   boot("pull", bpm, host, { width: 64, height: 65 }, debug);
 } else if (window.location.hash === "#whistlegraph") {
   boot("whistlegraph", bpm, host, undefined, debug);
+} else if (window.location.hash === "#blank") {
+  boot("blank", bpm, host, undefined, debug);
+} else if (window.location.hash === "#prompt") {
+  boot("prompt", bpm, host, undefined, debug);
+} else if (window.location.hash === "#plot") {
+  boot("plot", bpm, host, undefined, debug);
 } else {
   boot("stage", bpm, host);
 }
