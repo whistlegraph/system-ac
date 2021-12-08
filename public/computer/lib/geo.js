@@ -2,7 +2,7 @@
 
 const { floor } = Math;
 
-// A dynamic box defined by x, y, w, h with mutable methods.
+// A dynamic box defined by x, y, w, h with methods that mutate the state.
 export class Box {
   x = 0;
   y = 0;
@@ -75,6 +75,8 @@ export class Box {
 export class Grid {
   box;
   scale;
+  // TODO: Could rotation eventually be added here? 2021.12.08.10.51
+
   scaled;
 
   constructor(x, y, w, h, s) {
@@ -90,9 +92,9 @@ export class Grid {
     );
   }
 
-  // Returns unscaled point `{x, y}` in `grid` for given display coordinate `pos`,
-  // or `false` if `pos` is outside of `grid`.
-  squareUnder({ x, y }) {
+  // Returns unscaled point `{x, y}` in `grid` for given display coordinate
+  // `pos`, or `false` if `pos` is outside of `grid`.
+  under({ x, y }) {
     if (this.scaled.contains({ x, y })) {
       return {
         x: this.box.x + floor((x - this.box.x) / this.scale) * this.scale,
@@ -103,14 +105,29 @@ export class Grid {
     } else return false;
   }
 
-  // Find exact center point of grid square if possible, otherwise return 0.
-  // (starting at 3x3, and only including perfect centers)
-  get squareCenter() {
+  // Yields an array of offset points that can be plotted to mark the center of
+  // each grid square. (Useful for editors, development and debugging.)
+  // Tries to find the exact center point, but if that doesn't exist then
+  // this function produces 4 points in the center.
+  get center() {
+    let offset = [];
+
     const halfScale = this.scale / 2;
+    const o = floor(halfScale);
+    // Find exact center point of grid square if possible.
     if (halfScale % 1 === 0.5 && halfScale > 0.5) {
-      return floor(halfScale);
-    } else {
-      return 0;
+      // We have a perfect middle square.
+      offset.push({ x: o, y: o });
+    } else if (this.scale >= 4) {
+      // We can assume we are even here, so we return 4 pixels to mark
+      // the center.
+      offset.push(
+        { x: o, y: o },
+        { x: o - 1, y: o - 1 },
+        { x: o - 1, y: o },
+        { x: o, y: o - 1 }
+      );
     }
+    return offset;
   }
 }

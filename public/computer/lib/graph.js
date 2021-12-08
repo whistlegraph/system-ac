@@ -27,12 +27,12 @@ function makeBuffer(width, height, fillProcess) {
   if (typeof fillProcess === "function") {
     // Remember the current buffer and color.
     const savedBuffer = getBuffer();
-    const storedColor = c;
+    const rc = c; // Remember color.
     setBuffer(buffer);
     fillProcess(width, height);
     // Restore old buffer and color.
     setBuffer(savedBuffer);
-    color(...storedColor);
+    color(...rc);
   }
 
   return buffer;
@@ -269,13 +269,8 @@ function box() {
 }
 
 // Renders a square grid at x, y given cols, rows, and scale.
-// TODO: Add color adjustment / inherit global color.
-function grid({
-  box: { x, y, w: cols, h: rows },
-  scale,
-  squareCenter: offset,
-}) {
-  const storedColor = c.slice(); // Remember color.
+function grid({ box: { x, y, w: cols, h: rows }, scale, center }) {
+  const rc = c.slice(); // Remember color.
 
   const w = cols * scale;
   const h = rows * scale;
@@ -292,7 +287,7 @@ function grid({
   plot(right, y);
   plot(x, bottom);
   plot(right, bottom);
-  color(...storedColor);
+  color(...rc);
 
   // Draw each grid square, with optional center points.
   const colPix = floor(w / cols),
@@ -308,16 +303,15 @@ function grid({
       color(c[0], c[1], c[2], even(i + j) ? 50 : 75);
       box(plotX, plotY, scale);
 
-      // TODO: Turn this into a generic drawing function? 2021.12.06.21.27
-      // Render exact center point of this grid square if it exists mathematically.
-      if (offset > 0) {
+      // Color in the centers of each grid square.
+      center.forEach((p) => {
         color(c[0], c[1], c[2], 100);
-        plot(plotX + offset, plotY + offset);
-      }
+        plot(plotX + p.x, plotY + p.y);
+      });
     }
   }
 
-  color(...storedColor); // Restore color.
+  color(...rc); // Restore color.
 }
 
 function noise16() {
