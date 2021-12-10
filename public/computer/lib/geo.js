@@ -79,6 +79,9 @@ export class Grid {
 
   scaled;
 
+  #halfScale;
+  centerOffset;
+
   constructor(x, y, w, h, s) {
     // Takes the same arguments as box.
     this.box = new Box(x, y, w, h);
@@ -90,19 +93,31 @@ export class Grid {
       this.box.w * this.scale,
       this.box.h * this.scale
     );
+
+    this.#halfScale = this.scale / 2;
+    this.centerOffset = floor(this.#halfScale);
   }
 
   // Returns unscaled point `{x, y}` in `grid` for given display coordinate
   // `pos`, or `false` if `pos` is outside of `grid`.
   under({ x, y }) {
-    if (this.scaled.contains({ x, y })) {
-      return {
-        x: this.box.x + floor((x - this.box.x) / this.scale) * this.scale,
-        y: this.box.y + floor((y - this.box.y) / this.scale) * this.scale,
-        w: this.scale,
-        h: this.scale,
-      };
-    } else return false;
+    const { scale, box } = this;
+
+    // Get original (unscaled) grid position.
+    const gx = floor((x - box.x) / scale);
+    const gy = floor((y - box.y) / scale);
+
+    // Generate display (x, y) box and grid (gx, gy) position,
+    // and whether we are in the grid or not.
+    return {
+      x: box.x + gx * scale,
+      y: box.y + gy * scale,
+      w: scale,
+      h: scale,
+      gx,
+      gy,
+      in: this.scaled.contains({ x, y }),
+    };
   }
 
   // Yields an array of offset points that can be plotted to mark the center of
@@ -110,24 +125,24 @@ export class Grid {
   // Tries to find the exact center point, but if that doesn't exist then
   // this function produces 4 points in the center.
   get center() {
-    let offset = [];
+    const o = this.centerOffset;
 
-    const halfScale = this.scale / 2;
-    const o = floor(halfScale);
+    let points = [];
+
     // Find exact center point of grid square if possible.
-    if (halfScale % 1 === 0.5 && halfScale > 0.5) {
+    if (this.#halfScale % 1 === 0.5 && this.#halfScale > 0.5) {
       // We have a perfect middle square.
-      offset.push({ x: o, y: o });
+      points.push({ x: o, y: o });
     } else if (this.scale >= 4) {
       // We can assume we are even here, so we return 4 pixels to mark
       // the center.
-      offset.push(
+      points.push(
         { x: o, y: o },
         { x: o - 1, y: o - 1 },
         { x: o - 1, y: o },
         { x: o, y: o - 1 }
       );
     }
-    return offset;
+    return points;
   }
 }

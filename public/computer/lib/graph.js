@@ -145,6 +145,8 @@ function paste(from, destX = 0, destY = 0) {
 }
 
 function line(x0, y0, x1, y1) {
+  // TODO: Add any pan transformations.
+
   // Make sure everything is ceil'd.
   x0 = Math.ceil(x0);
   y0 = Math.ceil(y0);

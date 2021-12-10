@@ -9,6 +9,9 @@
 
 // After Oliver + Mija:
 
+// TODO: Add stochastic syntax / DSL for basic drawing?
+//wipe.ink.line.line.line.ink("red").box;
+
 // TODO: What crypto-currency / web3.js lib do I hook this thing up to for minting, etc?
 
 // TODO: Allow disk servers to exist for live-reloading:
@@ -18,6 +21,7 @@
 // - It's possible that a file system could exist on that server...
 
 // TODO: Make a filesystem?
+
 // Make a "mint" command.
 
 // TODO: Make a video-recording app that generates 3 letter codes? - to augment
@@ -89,6 +93,8 @@ if (window.location.hash === "#pull") {
   boot("whistlegraph", bpm, host, undefined, debug);
 } else if (window.location.hash === "#blank") {
   boot("blank", bpm, host, undefined, debug);
+} else if (window.location.hash === "#alex-row") {
+  boot("alex-row", bpm, host, undefined, debug);
 } else if (window.location.hash === "#prompt") {
   boot("prompt", bpm, host, undefined, debug);
 } else if (window.location.hash === "#plot") {
