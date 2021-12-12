@@ -100,7 +100,7 @@ export class Grid {
 
   // Returns unscaled point `{x, y}` in `grid` for given display coordinate
   // `pos`, or `false` if `pos` is outside of `grid`.
-  under({ x, y }) {
+  under({ x, y }, cb) {
     const { scale, box } = this;
 
     // Get original (unscaled) grid position.
@@ -109,7 +109,7 @@ export class Grid {
 
     // Generate display (x, y) box and grid (gx, gy) position,
     // and whether we are in the grid or not.
-    return {
+    const gridSquare = {
       x: box.x + gx * scale,
       y: box.y + gy * scale,
       w: scale,
@@ -118,6 +118,9 @@ export class Grid {
       gy,
       in: this.scaled.contains({ x, y }),
     };
+
+    if (gridSquare.in && cb) cb(gridSquare);
+    return gridSquare;
   }
 
   // Yields an array of offset points that can be plotted to mark the center of

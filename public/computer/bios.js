@@ -3,7 +3,7 @@ import * as Loop from "./lib/loop.js";
 import { Pen } from "./lib/pen.js";
 import * as Graph from "./lib/graph.js";
 import * as UI from "./lib/ui.js";
-import { apiObject } from "./lib/helpers.js";
+import { apiObject, extension } from "./lib/helpers.js";
 
 // 💾 Boot the system and load a disk.
 async function boot(
@@ -310,11 +310,18 @@ async function boot(
 
   // TODO: Organize e into e.data.type and e.data.content.
   function receivedChange({ data: { type, content } }) {
-    // Route to received beat if this change is not a frame update.
+    // Route to different functions if this change is not a full frame update.
     if (type === "beat") {
       receivedBeat(content);
       return;
     }
+
+    if (type === "download") {
+      receivedDownload(content);
+      return;
+    }
+
+    // Assume that type is "render" or "update" from now on.
 
     // Check for a change in resolution.
     if (content.reframe) {
@@ -369,6 +376,22 @@ async function boot(
     // TODO: Do renders always need to be requested?
     //console.log("🎨 MS:", (performance.now() - startTime).toFixed(1));
   }
+}
+
+// Reads the extension off of filename to determine the mimetype and then
+// handles the data accordingly and downloads the file in the browser.
+function receivedDownload({ filename, data }) {
+  let MIME = "application/octet-stream"; // TODO: Default content type?
+
+  if (extension(filename) === "json") {
+    MIME = "application/json";
+  }
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data], { type: MIME }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 export { boot };

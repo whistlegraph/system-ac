@@ -3,6 +3,8 @@
 import * as graph from "./graph.js";
 import * as num from "./num.js";
 import * as geo from "./geo.js";
+import * as ui from "./ui.js";
+
 import * as help from "./help.js";
 
 let boot = () => false;
@@ -36,6 +38,9 @@ const $commonApi = {
   geo: {
     Box: geo.Box,
     Grid: geo.Grid,
+  },
+  ui: {
+    Button: ui.Button,
   },
   help: {
     choose: help.choose,
@@ -97,8 +102,9 @@ function ink() {
       args = Array.from(args);
       args.push(args[0], args[0]);
     } else if (isArray()) {
-      // Or if it's an array, then spread it out.
-      args = args[0];
+      // Or if it's an array, then spread it out and re-ink.
+      // args = args[0];
+      return ink(...args[0]);
     }
   } else if (args.length === 2) {
     // rgb, a
@@ -115,7 +121,15 @@ const $paintApi = {
     return $paintApi;
   },
   pixels: graph.makeBuffer,
-  setBuffer: graph.setBuffer,
+  setPixels: graph.setBuffer,
+  pan: function () {
+    graph.pan(...arguments);
+    return $paintApi;
+  },
+  unpan: function () {
+    graph.unpan();
+    return $paintApi;
+  },
   // 2D
   wipe: function () {
     if (arguments.length > 0) ink(...arguments);
@@ -128,7 +142,10 @@ const $paintApi = {
     graph.plot(...arguments);
     return $paintApi;
   },
-  line: graph.line,
+  line: function () {
+    graph.line(...arguments);
+    return $paintApi;
+  },
   box: graph.box,
   grid: function () {
     graph.grid(...arguments);
@@ -214,8 +231,9 @@ const { load, send } = (() => {
 
 // 3. Produce a frame.
 // Boot procedure:
-// The first `paint` happens after `boot`, then updates happen every frame
-// before painting.
+// First `paint` happens after `boot`, then any `act` and `sim`s each frame
+// before `paint`ing occurs. (which is tied to display refresh right now but it
+// could be manually triggered via `needsPaint();`). 2021.12.11.01.25
 // TODO: Finish organizing e into e.data.type and e.data.content.
 function makeFrame({ data: { type, content } }) {
   // 1. Beat // One send (returns afterwards)
@@ -270,9 +288,8 @@ function makeFrame({ data: { type, content } }) {
 
   // 2. Frame
   else if (type === "frame") {
-    // 1. Hardware
-
-    {
+    // Act & Sim (Occurs after first boot and paint.)
+    if (paintCount > 0n) {
       const $api = {};
       Object.assign($api, $commonApi);
       Object.assign($api, $updateApi);
@@ -287,6 +304,10 @@ function makeFrame({ data: { type, content } }) {
 
       $api.cursor = (code) => (cursorCode = code);
 
+      // 🌟 Act
+      // Add download event to trigger a file download from the main thread.
+      $api.download = (dl) => send({ type: "download", content: dl });
+
       // Ingest all pen input events by running act for each event.
       content.pen.forEach((data) => {
         Object.assign(data, { device: "pen", is: (e) => e === data.name });
@@ -298,16 +319,18 @@ function makeFrame({ data: { type, content } }) {
 
       // TODO: Also process keyboard events. 2021.11.27.16.48
 
+      // Remove $api elements that are not needed for `sim`.
       delete $api.event;
+      delete $api.download;
 
-      // Update // no send
+      // 🤖 Sim // no send
       if (content.updateCount > 0 && paintCount > 0n) {
         // Update the number of times that are needed.
         for (let i = content.updateCount; i--; ) sim($api);
       }
     }
 
-    // Render // Two sends (Move one send up eventually? -- 2021.11.27.17.20)
+    // 🖼 Render // Two sends (Move one send up eventually? -- 2021.11.27.17.20)
     if (content.needsRender) {
       const $api = {};
       Object.assign($api, $commonApi);
@@ -315,7 +338,7 @@ function makeFrame({ data: { type, content } }) {
       $api.paintCount = Number(paintCount);
 
       let pixels = new ImageData(
-        new Uint8ClampedArray(content.pixels), // Is this the only necessary part?
+        new Uint8ClampedArray(content.pixels), // TODO: Is this the only necessary part?
         content.width,
         content.height
       );
@@ -376,7 +399,7 @@ function makeFrame({ data: { type, content } }) {
       if (reframe) reframe = undefined;
       if (cursorCode) cursorCode = undefined;
     } else {
-      // Send update.
+      // Send update (sim).
       send(
         {
           type: "update",

@@ -10,11 +10,12 @@ export function times(n, fun) {
 
 // Generate a sealed object with named keys set to undefined.
 export function apiObject() {
-  const obj = {}
-  
-  for (const key of arguments) {
-    obj[key] = undefined;
-  }
-  
+  const obj = {};
+  for (const key of arguments) obj[key] = undefined;
   return Object.seal(obj);
+}
+
+export function extension(filename) {
+  // https://stackoverflow.com/a/680982
+  return /(?:\.([^.]+))?$/.exec(filename)[1];
 }

@@ -7,11 +7,12 @@ import {
   radians,
   lerp,
 } from "./num.js";
-const { floor } = Math;
+const { floor, round } = Math;
 
 let width, height, pixels;
 const depthBuffer = [];
 const c = [255, 255, 255, 255];
+const panTranslation = { x: 0, y: 0 }; // For 2d shifting using `pan` and `unpan`.
 
 // 1. Configuration & State
 
@@ -75,8 +76,8 @@ function clear() {
 }
 
 function plot(x, y) {
-  x = Math.round(x);
-  y = Math.round(y);
+  x = round(x);
+  y = round(y);
 
   // Skip pixels that are offscreen.
   if (x < 0 || x >= width || y < 0 || y >= height) {
@@ -92,14 +93,28 @@ function plot(x, y) {
     pixels[i] = c[0];
     pixels[i + 1] = c[1];
     pixels[i + 2] = c[2];
-    pixels[i + 3] = 255;
+    pixels[i + 3] = c[3];
   } else if (alpha !== 0) {
     // Lerp to blend.
     pixels[i] = lerp(pixels[i], c[0], alpha / 255);
     pixels[i + 1] = lerp(pixels[i + 1], c[1], alpha / 255);
     pixels[i + 2] = lerp(pixels[i + 2], c[2], alpha / 255);
-    pixels[i + 3] = 255;
+    // TODO: Is this the best way to alpha blend? What kind is this? 2021.12.10.15.43
+    // pixels[i + 3] = Math.min(255, pixels[i + 3] + c[3]);
+    pixels[i + 3] = floor(255, (pixels[i + 3] + c[3]) / 2);
   }
+}
+
+// TODO: Implement panTranslation for primitives other than line?
+function pan(x, y) {
+  if (y === undefined) y = x;
+  panTranslation.x += x;
+  panTranslation.y += y;
+}
+
+function unpan() {
+  panTranslation.x = 0;
+  panTranslation.y = 0;
 }
 
 function copy(destX, destY, srcX, srcY, src, alpha = 1.0) {
@@ -145,7 +160,14 @@ function paste(from, destX = 0, destY = 0) {
 }
 
 function line(x0, y0, x1, y1) {
-  // TODO: Add any pan transformations.
+  // Add any panTranslations.
+  x0 += panTranslation.x;
+  y0 += panTranslation.y;
+  x1 += panTranslation.x;
+  y1 += panTranslation.y;
+
+  // TODO: Check if line is perfectly horizontal and then skip bresenham and
+  // optimize by filling the whole buffer with the current color.
 
   // Make sure everything is ceil'd.
   x0 = Math.ceil(x0);
@@ -257,7 +279,6 @@ function box() {
     line(x + w - 1, y + 1, x + w - 1, y + h - 2); // Right
   } else if (mode === "fill") {
     w -= 1;
-
     if (Math.sign(height) === 1) {
       for (let row = 0; row < h; row += 1) {
         line(x, y + row, x + w, y + row);
@@ -271,49 +292,75 @@ function box() {
 }
 
 // Renders a square grid at x, y given cols, rows, and scale.
-function grid({ box: { x, y, w: cols, h: rows }, scale, center }) {
+// Buffer is optional, and if present will render the pixels at scale starting
+// from the top left corner of the buffer, repeating if needed to fill the grid.
+function grid({ box: { x, y, w: cols, h: rows }, scale, center }, buffer) {
   const rc = c.slice(); // Remember color.
 
   const w = cols * scale;
   const h = rows * scale;
 
-  // Plot a point in each of the four corners.
-  const right = x + w - 1,
-    bottom = y + h - 1;
-
   // TODO: Where to add currying back into this API so I can do color().plot().plot() 2021.12.06.21.32
   // - Make the API object here in this file and wrap the functions as curries?
 
-  color(64, 64, 64);
-  plot(x, y);
-  plot(right, y);
-  plot(x, bottom);
-  plot(right, bottom);
-  color(...rc);
-
-  // Draw each grid square, with optional center points.
   const colPix = floor(w / cols),
     rowPix = floor(h / rows);
 
-  for (let i = 0; i < cols; i += 1) {
-    const plotX = x + colPix * i;
-
+  if (buffer) {
+    // Draw a scaled image if the buffer is present.
     for (let j = 0; j < rows; j += 1) {
       const plotY = y + rowPix * j;
+      for (let i = 0; i < cols; i += 1) {
+        const plotX = x + colPix * i;
 
-      // Lightly shade this grid square, alternating tint on evens and odds.
-      color(c[0], c[1], c[2], even(i + j) ? 50 : 75);
-      box(plotX, plotY, scale);
+        // Repeat (tile) the source over X and Y if we run out of pixels.
+        const repeatX = i % buffer.width;
+        const repeatY = j % buffer.height;
+        const repeatCols = buffer.width;
 
-      // Color in the centers of each grid square.
-      center.forEach((p) => {
-        color(c[0], c[1], c[2], 100);
-        plot(plotX + p.x, plotY + p.y);
-      });
+        // Loop over the buffer and find the proper color.
+        const pixIndex = (repeatX + repeatCols * repeatY) * 4;
+
+        if (pixIndex < buffer.pixels.length) {
+          color(...buffer.pixels.subarray(pixIndex, pixIndex + 4));
+          box(plotX, plotY, scale);
+        }
+      }
     }
-  }
+  } else {
+    // Draw a debug / blueprint grid if no buffer is present.
 
-  color(...rc); // Restore color.
+    // Plot a point in each of the four corners.
+    const right = x + w - 1,
+      bottom = y + h - 1;
+
+    color(64, 64, 64);
+    plot(x, y);
+    plot(right, y);
+    plot(x, bottom);
+    plot(right, bottom);
+    color(...rc);
+
+    // Draw each grid square, with optional center points.
+    for (let i = 0; i < cols; i += 1) {
+      const plotX = x + colPix * i;
+      for (let j = 0; j < rows; j += 1) {
+        const plotY = y + rowPix * j;
+
+        // Lightly shade this grid square, alternating tint on evens and odds.
+        color(c[0], c[1], c[2], even(i + j) ? 50 : 75);
+        box(plotX, plotY, scale);
+
+        // Color in the centers of each grid square.
+        center.forEach((p) => {
+          color(c[0], c[1], c[2], 100);
+          plot(plotX + p.x, plotY + p.y);
+        });
+      }
+    }
+
+    color(...rc); // Restore color.
+  }
 }
 
 function noise16() {
@@ -325,7 +372,7 @@ function noise16() {
   }
 }
 
-export { clear, plot, copy, paste, line, box, grid, noise16 };
+export { clear, plot, pan, unpan, copy, paste, line, box, grid, noise16 };
 
 // 3. 3D Drawing (Kinda mixed with some 2D)
 
