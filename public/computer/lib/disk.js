@@ -19,6 +19,7 @@ let cursorCode;
 let paintCount = 0n;
 
 let penX, penY;
+let upload;
 
 // 1. API
 
@@ -31,6 +32,7 @@ const $commonApi = {
     radians: num.radians,
     lerp: num.lerp,
     Track: num.Track,
+    timestamp: num.timestamp,
     vec4: num.vec4,
     vec3: num.vec3,
     mat4: num.mat4,
@@ -162,7 +164,7 @@ const $paintApi = {
 // 2. Loading the disk.
 const { load, send } = (() => {
   let loadUrlCount = 1;
-  let loadHost;
+  let loadHost; // = "disks.aesthetic.computer"; TODO: Add default host here.
 
   async function load(path, host = loadHost, search) {
     if (loading === false) {
@@ -182,6 +184,9 @@ const { load, send } = (() => {
 
     const module = await import(fullUrl);
     loadHost = host;
+
+    // Add host to the networking api.
+    $commonApi.net = { host };
 
     // Artificially imposed loading by at least 1/4 sec.
     setTimeout(() => {
@@ -286,6 +291,21 @@ function makeFrame({ data: { type, content } }) {
     squares.length = 0;
   }
 
+  // 1a. Upload // One send (returns afterwards)
+  // Here we are receiving file data from main thread that was requested
+  // by $api.upload. We check to see if the upload promise exists and then
+  // use it and/or throw it away.
+  if (type === "upload" && upload) {
+    if (content.result === "success") {
+      upload?.resolve(content.data);
+    } else if (content.result === "error") {
+      console.error("File failed to load:", content.data);
+      upload?.reject(content.data);
+    }
+    upload = undefined;
+    return;
+  }
+
   // 2. Frame
   else if (type === "frame") {
     // Act & Sim (Occurs after first boot and paint.)
@@ -307,6 +327,20 @@ function makeFrame({ data: { type, content } }) {
       // 🌟 Act
       // Add download event to trigger a file download from the main thread.
       $api.download = (dl) => send({ type: "download", content: dl });
+
+      // Add upload event to allow the main thread to open a file chooser.
+      // type: Accepts N mimetypes or file extensions as comma separated string.
+      // Usage: upload(".jpg").then((data) => ( ... )).catch((err) => ( ... ));
+      $api.upload = (type) => {
+        send({ type: "upload", content: type });
+        return new Promise((resolve, reject) => {
+          upload = { resolve, reject };
+        });
+      };
+
+      //$api.upload = new Promise((resolve, reject) => {
+
+      //})
 
       // Ingest all pen input events by running act for each event.
       content.pen.forEach((data) => {
@@ -338,7 +372,8 @@ function makeFrame({ data: { type, content } }) {
       $api.paintCount = Number(paintCount);
 
       let pixels = new ImageData(
-        new Uint8ClampedArray(content.pixels), // TODO: Is this the only necessary part?
+        // TODO: Is this the only necessary part?
+        new Uint8ClampedArray(content.pixels),
         content.width,
         content.height
       );
@@ -373,8 +408,52 @@ function makeFrame({ data: { type, content } }) {
         graph.depthBuffer[i] = Number.MAX_VALUE;
       }
 
+      // Add preload to the boot api.
+      // Accepts paths local to the original disk server, full urls, and demos.
+      // Usage:   preload("demo:drawings/2021.12.12.17.28.16.json") // pre-included
+      //          preload("https://myserver.com/test.json") // remote
+      //          preload("drawings/default.json") // hosted with disk
+      // Results: preload().then((r) => ...).catch((e) => ...) // via promise
+
+      // TODO: Preload multiple files and load them into an assets folder with
+      //       a complete handler. 2021.12.12.22.24
+
+      // TODO: Prepare / unpack files other than `.json`,
+      //       such as `.png` -> `buffer` or `.wav`. -> `sample`
+      //       2021.12.12.22.26
+      $api.net.preload = function (path) {
+        try {
+          const url = new URL(path);
+
+          if (url.protocol === "demo:") {
+            // Load from aesthetic.computer host.
+            path = `/demo/${url.pathname}`;
+          } else if (url.protocol === "https:") {
+            console.log("Https", url, path);
+            // No need to change path because an original URL was specified.
+          }
+        } catch {
+          // Not a valid URL so assume local file on disk server.
+          path = `https://${$api.net.host}/${path}`;
+        }
+
+        return new Promise((resolve, reject) => {
+          fetch(path)
+            .then((response) => {
+              if (!response.ok) {
+                reject(response.status);
+              } else return response.json();
+            })
+            .then((json) => resolve(json))
+            .catch(reject);
+        });
+      };
+
       // Run boot only once before painting for the first time.
       if (paintCount === 0n) boot($api);
+
+      // We no longer need the preload api for painting.
+      delete $api.net.preload;
 
       // Paint a frame, which can return false to enable caching via paintChained and by
       // default returns undefined. -- Is this really what I want? 2021.11.27.16.20

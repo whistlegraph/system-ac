@@ -321,6 +321,11 @@ async function boot(
       return;
     }
 
+    if (type === "upload") {
+      receivedUpload(content);
+      return;
+    }
+
     // Assume that type is "render" or "update" from now on.
 
     // Check for a change in resolution.
@@ -376,22 +381,74 @@ async function boot(
     // TODO: Do renders always need to be requested?
     //console.log("🎨 MS:", (performance.now() - startTime).toFixed(1));
   }
-}
 
-// Reads the extension off of filename to determine the mimetype and then
-// handles the data accordingly and downloads the file in the browser.
-function receivedDownload({ filename, data }) {
-  let MIME = "application/octet-stream"; // TODO: Default content type?
+  // Reads the extension off of filename to determine the mimetype and then
+  // handles the data accordingly and downloads the file in the browser.
+  function receivedDownload({ filename, data }) {
+    let MIME = "application/octet-stream"; // TODO: Default content type?
 
-  if (extension(filename) === "json") {
-    MIME = "application/json";
+    if (extension(filename) === "json") {
+      MIME = "application/json";
+    }
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data], { type: MIME }));
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([data], { type: MIME }));
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  // Opens a file chooser that is filtered by a given extension / mimetype list.
+  // And sends the text contents of an individual file back to the disk.
+  function receivedUpload(type) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = type;
+
+    input.onchange = (e) => {
+      // Grab the only selected file in the file input.
+      const file = e.target.files[0];
+
+      // Does type match nothing in the comma separated `input.accept` list?
+      const noMatch = type.split(",").every((t) => {
+        return t !== file.type && t !== `.${extension(file.name)}`;
+      });
+
+      // Relay error if chosen file does not match the `input.accept` list.
+      if (noMatch) {
+        send({
+          type: "upload",
+          content: {
+            result: "error",
+            data: `Chosen file was not of type "${type}"`,
+          },
+        });
+        return;
+      }
+
+      // Read the file.
+      const reader = new FileReader();
+      reader.readAsText(file);
+
+      // Send the content back to the disk once the file loads.
+      reader.onload = (e) => {
+        send({
+          type: "upload",
+          content: { result: "success", data: e.target.result },
+        });
+      };
+
+      // Relay an error if the file fails to load for any reason.
+      reader.onerror = () => {
+        send({
+          type: "upload",
+          content: { result: "error", data: reader.error },
+        });
+      };
+    };
+
+    input.click();
+  }
 }
 
 export { boot };

@@ -46,6 +46,19 @@ export function lerp(a, b, amount) {
   return a + (b - a) * clamp(amount, 0, 1);
 }
 
+// Returns a string of numbers based on local system time. YYYY.MM.DD.HH.MM.SS
+export function timestamp() {
+  const d = new Date();
+  const pad = (n) => n.toString().padStart(2, "0");
+  return `
+    ${d.getFullYear()}.
+    ${d.getMonth() + 1}.
+    ${pad(d.getDate())}.
+    ${pad(d.getHours())}.
+    ${pad(d.getMinutes())}.
+    ${pad(d.getSeconds())}`.replace(/\s/g, "");
+}
+
 // A. Lerps over a single value (from->to) via `progress` (0->1).
 // B. Quantizes over an array of individual `values` via `progress` (0->1).
 // TODO: Allow `progress` to be 0->N which would map to an index in `values`.

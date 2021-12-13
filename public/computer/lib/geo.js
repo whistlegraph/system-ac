@@ -123,6 +123,11 @@ export class Grid {
     return gridSquare;
   }
 
+  // Returns display coordinates from local, untransformed ones.
+  get(x, y) {
+    return [this.box.x + x * this.scale, this.box.y + y * this.scale];
+  }
+
   // Yields an array of offset points that can be plotted to mark the center of
   // each grid square. (Useful for editors, development and debugging.)
   // Tries to find the exact center point, but if that doesn't exist then
