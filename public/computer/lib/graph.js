@@ -7,7 +7,7 @@ import {
   radians,
   lerp,
 } from "./num.js";
-const { floor, round } = Math;
+const { floor, round, sin, cos } = Math;
 
 let width, height, pixels;
 const depthBuffer = [];
@@ -363,6 +363,38 @@ function grid({ box: { x, y, w: cols, h: rows }, scale, center }, buffer) {
   }
 }
 
+// Loading & rendering stored drawings. TODO: Store this on another layer of
+//                                            abstraction? 2021.12.13.22.04
+// Silently fails if `drawing` is left `undefined`.
+function draw(drawing, x, y, scale = 3, angle = 0) {
+  if (drawing === undefined) return;
+
+  // TODO: Eventually make this the call: rotatePoint(args[0], args[1], 0, 0);
+  angle = radians(angle);
+  const s = sin(angle);
+  const c = cos(angle);
+
+  pan(x, y);
+  drawing.commands.forEach(({ name, args }) => {
+    args = args.map((a) => a * scale); // TODO: Add scale in addition to pan.
+
+    let x1 = args[0]; // x1
+    let y1 = args[1]; // y1
+
+    let x2 = args[2]; // x2
+    let y2 = args[3]; // y2
+
+    let nx1 = x1 * c - y1 * s;
+    let ny1 = x1 * s + y1 * c;
+
+    let nx2 = x2 * c - y2 * s;
+    let ny2 = x2 * s + y2 * c;
+
+    if (name === "line") line(nx1, ny1, nx2, ny2);
+  });
+  unpan();
+}
+
 function noise16() {
   for (let i = 0; i < pixels.length; i += 4) {
     pixels[i] = byteInterval17(randInt(16)); // r
@@ -372,7 +404,7 @@ function noise16() {
   }
 }
 
-export { clear, plot, pan, unpan, copy, paste, line, box, grid, noise16 };
+export { clear, plot, pan, unpan, copy, paste, line, box, grid, draw, noise16 };
 
 // 3. 3D Drawing (Kinda mixed with some 2D)
 

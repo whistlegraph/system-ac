@@ -153,6 +153,10 @@ const $paintApi = {
     graph.grid(...arguments);
     return $paintApi;
   },
+  draw: function () {
+    graph.draw(...arguments);
+    return $paintApi;
+  },
   noise16: graph.noise16,
   // 3D
   Camera: graph.Camera,
