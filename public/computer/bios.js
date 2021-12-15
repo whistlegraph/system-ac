@@ -78,14 +78,8 @@ async function boot(
 
     // Paste stored imageData back.
     ctx.putImageData(storedImageData, 0, 0);
-
     imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-    Object.assign(screen, {
-      pixels: imageData.data,
-      width,
-      height,
-    });
+    Object.assign(screen, { pixels: imageData.data, width, height });
 
     if (fixedWidth === undefined && fixedHeight === undefined) {
       Graph.setBuffer(screen);
@@ -368,8 +362,8 @@ async function boot(
         // Draw the pause icon in the top left.
         // TODO: How to I use my actual API in here? 2021.11.28.04.00
         Graph.color(0, 255, 255);
-        Graph.line(3, 3, 3, 9);
-        Graph.line(6, 3, 6, 9);
+        Graph.line(1, 1, 1, 4);
+        Graph.line(3, 1, 3, 4);
       }
       ctx.putImageData(imageData, 0, 0);
     } else if (content.loading === true && debug === true) {
