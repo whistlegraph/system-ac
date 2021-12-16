@@ -4,8 +4,8 @@ import * as graph from "./graph.js";
 import * as num from "./num.js";
 import * as geo from "./geo.js";
 import * as ui from "./ui.js";
-
 import * as help from "./help.js";
+import { notArray } from "./helpers.js";
 
 let boot = () => false;
 let sim = () => false;
@@ -17,6 +17,8 @@ let loading = false;
 let reframe;
 let cursorCode;
 let paintCount = 0n;
+const paintLayers = [];
+let paintLayer = 0;
 
 let penX, penY;
 let upload;
@@ -117,52 +119,54 @@ function ink() {
 }
 
 const $paintApi = {
-  // Configuration
-  ink: function () {
-    ink(...arguments);
-    return $paintApi;
-  },
-  pixels: graph.makeBuffer,
-  setPixels: graph.setBuffer,
-  pan: function () {
-    graph.pan(...arguments);
-    return $paintApi;
-  },
-  unpan: function () {
-    graph.unpan();
-    return $paintApi;
-  },
-  // 2D
-  wipe: function () {
-    if (arguments.length > 0) ink(...arguments);
-    graph.clear();
-    return $paintApi;
-  },
-  copy: graph.copy,
-  paste: graph.paste,
-  plot: function () {
-    graph.plot(...arguments);
-    return $paintApi;
-  },
-  line: function () {
-    graph.line(...arguments);
-    return $paintApi;
-  },
-  box: graph.box,
-  grid: function () {
-    graph.grid(...arguments);
-    return $paintApi;
-  },
-  draw: function () {
-    graph.draw(...arguments);
-    return $paintApi;
-  },
-  noise16: graph.noise16,
-  // 3D
+  // 3D Classes & Objects
   Camera: graph.Camera,
   Form: graph.Form,
   TRIANGLE,
   SQUARE,
+};
+
+const $paintApiUnwrapped = {
+  // Configuration
+  ink,
+  pixels: graph.makeBuffer,
+  setPixels: graph.setBuffer,
+  pan: graph.pan,
+  unpan: graph.unpan,
+  // 2D
+  wipe: function () {
+    if (arguments.length > 0) ink(...arguments);
+    graph.clear();
+  },
+  copy: graph.copy,
+  paste: graph.paste,
+  plot: graph.plot,
+  line: graph.line,
+  box: graph.box,
+  grid: graph.grid,
+  draw: graph.draw,
+  noise16: graph.noise16,
+};
+
+// Filter for and then wrap every rendering behavior of $paintApi into a system
+// so they can be deferred in groups, using layer. (See below)
+for (const k in $paintApiUnwrapped) {
+  if (typeof $paintApiUnwrapped[k] === "function") {
+    // Wrap and then transfer to $paintApi.
+    $paintApi[k] = function () {
+      if (notArray(paintLayers[paintLayer])) paintLayers[paintLayer] = [];
+      paintLayers[paintLayer].push(() => $paintApiUnwrapped[k](...arguments));
+      return $paintApi;
+    };
+  }
+}
+
+// Allows grouping & composing painting order using an AofA (Array of Arrays).
+// n: 0-n (Cannot be negative.)
+// fun: A callback that contains $paintApi commands or any other code.
+$paintApi.layer = function (n) {
+  paintLayer = n;
+  return $paintApi;
 };
 
 // 2. Loading the disk.
@@ -462,6 +466,18 @@ function makeFrame({ data: { type, content } }) {
       // Paint a frame, which can return false to enable caching via paintChained and by
       // default returns undefined. -- Is this really what I want? 2021.11.27.16.20
       const paintChanged = paint($api) === false ? false : true;
+
+      // Run everything that was specified to be painted via layer > 0, then
+      // devour paintLayers.
+
+      paintLayers.forEach((layer) => {
+        layer.forEach((paint) => {
+          // console.log(paint);
+          paint();
+        });
+      });
+      paintLayers.length = 0;
+      paintLayer = 0;
 
       // Return frame data back to the main thread.
       const sendData = { pixels: screen.pixels };

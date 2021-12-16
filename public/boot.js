@@ -1,7 +1,9 @@
 // Jeffrey's in-Project Notes
 // See also: https://www.notion.so/whistlegraph/9abf76a4437a46199087176bd06657ea?v=98b5d3a8965e47d9a4c177dd5147960d
 
-// Current: Add system font / main terminal? (Working in "plot").
+// - Finish Oliver + Mija's tracker / player interface.
+
+// - Add system font / main terminal? (Working in "plot").
 
 // Refactor all of "Stage" with future tasks in mind.
 // * Eliminate dead code.
@@ -99,6 +101,8 @@ if (window.location.hash === "#pull") {
   boot("prompt", bpm, host, undefined, debug);
 } else if (window.location.hash === "#plot") {
   boot("plot", bpm, host, undefined, debug);
+} else if (window.location.hash === "#tracker") {
+  boot("tracker", bpm, host, { width: 320, height: 180 }, debug);
 } else {
   boot("stage", bpm, host);
 }

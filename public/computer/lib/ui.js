@@ -12,7 +12,10 @@ class Button {
   down = false;
 
   constructor() {
-    this.box = new Box(...arguments);
+    if (arguments.length === 1) {
+      // Assume we are passing in a box object.
+      this.box = Box.copy(...arguments);
+    } else this.box = new Box(...arguments); // Otherwise: x, y, w, h for a box.
   }
 
   act(event, pushCb) {

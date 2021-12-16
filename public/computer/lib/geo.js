@@ -19,6 +19,11 @@ export class Box {
     if (this.h === 0) this.h = 1;
   }
 
+  // Yields a new box that is a copy of an existing old one.
+  static copy(box) {
+    return new Box(box.x, box.y, box.w, box.h);
+  }
+
   // Yields a box where x, y is at the top left and w, h are positive.
   get abs() {
     let { x, y, w, h } = this;
@@ -34,6 +39,11 @@ export class Box {
     }
 
     return new Box(x, y, w, h);
+  }
+
+  // Calculates a y value, representing the bottom of the box.
+  get bottom() {
+    return this.y + this.h;
   }
 
   // Crops a box to another box.
@@ -69,6 +79,10 @@ export class Box {
       this.x <= x && x < this.x + this.w && this.y <= y && y < this.y + this.h
     );
   }
+
+  misses(o) {
+    return !this.contains(o);
+  }
 }
 
 // A 2 dimensional uniform grid, using a box as the frame (with scaling).
@@ -77,8 +91,6 @@ export class Grid {
   scale;
   // TODO: Could rotation eventually be added here? 2021.12.08.10.51
 
-  scaled;
-
   #halfScale;
   centerOffset;
 
@@ -86,14 +98,6 @@ export class Grid {
     // Takes the same arguments as box.
     this.box = new Box(x, y, w, h);
     this.scale = s;
-
-    this.scaled = new Box(
-      this.box.x,
-      this.box.y,
-      this.box.w * this.scale,
-      this.box.h * this.scale
-    );
-
     this.#halfScale = this.scale / 2;
     this.centerOffset = floor(this.#halfScale);
   }
@@ -126,6 +130,16 @@ export class Grid {
   // Returns display coordinates from local, untransformed ones.
   get(x, y) {
     return [this.box.x + x * this.scale, this.box.y + y * this.scale];
+  }
+
+  // Yields the grid's transformed bounding box according to `scale`.
+  get scaled() {
+    return new Box(
+      this.box.x,
+      this.box.y,
+      this.box.w * this.scale,
+      this.box.h * this.scale
+    );
   }
 
   // Yields an array of offset points that can be plotted to mark the center of

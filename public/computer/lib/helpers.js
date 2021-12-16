@@ -19,3 +19,8 @@ export function extension(filename) {
   // https://stackoverflow.com/a/680982
   return /(?:\.([^.]+))?$/.exec(filename)[1];
 }
+
+// Returns true if the object is not an Array.
+export function notArray(obj) {
+  return !Array.isArray(obj);
+}
