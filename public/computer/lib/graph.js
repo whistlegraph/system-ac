@@ -16,7 +16,9 @@ const panTranslation = { x: 0, y: 0 }; // For 2d shifting using `pan` and `unpan
 
 // 1. Configuration & State
 
-function makeBuffer(width, height, fillProcess) {
+// TODO: Can't fill process have just one argument coming in?
+
+function makeBuffer(width, height, fillProcess, painting) {
   const imageData = new ImageData(width, height);
 
   const buffer = {
@@ -30,7 +32,10 @@ function makeBuffer(width, height, fillProcess) {
     const savedBuffer = getBuffer();
     const rc = c; // Remember color.
     setBuffer(buffer);
-    fillProcess(width, height);
+    const api = { width, height, pixels };
+    Object.assign(api, painting.api);
+    fillProcess(api); // Every fill process gets a destructurable painting API.
+    painting.paint();
     // Restore old buffer and color.
     setBuffer(savedBuffer);
     color(...rc);

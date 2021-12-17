@@ -17,13 +17,13 @@ let loading = false;
 let reframe;
 let cursorCode;
 let paintCount = 0n;
-const paintLayers = [];
-let paintLayer = 0;
+// const paintLayers = [];
+// let paintLayer = 0;
 
 let penX, penY;
 let upload;
 
-// 1. API
+// 1. ✔ API
 
 // For every function to access.
 const $commonApi = {
@@ -57,6 +57,8 @@ const $commonApi = {
 
 // Just for "update".
 const $updateApi = {};
+
+// 🖼 Painting
 
 // Pre-fab models:
 const SQUARE = {
@@ -127,12 +129,8 @@ const $paintApi = {
 };
 
 const $paintApiUnwrapped = {
-  // Configuration
-  ink,
-  pixels: graph.makeBuffer,
   setPixels: graph.setBuffer,
-  pan: graph.pan,
-  unpan: graph.unpan,
+  ink, // Color
   // 2D
   wipe: function () {
     if (arguments.length > 0) ink(...arguments);
@@ -145,31 +143,66 @@ const $paintApiUnwrapped = {
   box: graph.box,
   grid: graph.grid,
   draw: graph.draw,
+  form: function (f, cam) {
+    f.graph(cam);
+  },
+  pan: graph.pan,
+  unpan: graph.unpan,
   noise16: graph.noise16,
 };
 
-// Filter for and then wrap every rendering behavior of $paintApi into a system
-// so they can be deferred in groups, using layer. (See below)
-for (const k in $paintApiUnwrapped) {
-  if (typeof $paintApiUnwrapped[k] === "function") {
-    // Wrap and then transfer to $paintApi.
-    $paintApi[k] = function () {
-      if (notArray(paintLayers[paintLayer])) paintLayers[paintLayer] = [];
-      paintLayers[paintLayer].push(() => $paintApiUnwrapped[k](...arguments));
-      return $paintApi;
+// TODO: Eventually restructure this a bit. 2021.12.16.16.0
+//       Should global state like color and transform be stored here?
+class Painting {
+  #layers = [];
+  #layer = 0;
+  api = {};
+
+  constructor() {
+    Object.assign(this.api, $paintApi);
+    const p = this;
+
+    // Filter for and then wrap every rendering behavior of $paintApi into a
+    // system so they can be deferred in groups, using layer.
+    for (const k in $paintApiUnwrapped) {
+      if (typeof $paintApiUnwrapped[k] === "function") {
+        // Wrap and then transfer to #api.
+        p.api[k] = function () {
+          if (notArray(p.#layers[p.#layer])) p.#layers[p.#layer] = [];
+          p.#layers[p.#layer].push(() => $paintApiUnwrapped[k](...arguments));
+          return p.api;
+        };
+      }
+    }
+
+    // Creates a new pixel buffer with it's own layering wrapper / context
+    // on top of the base painting API.
+    this.api.painting = function () {
+      return graph.makeBuffer(...arguments, new Painting());
     };
+
+    // Allows grouping & composing painting order using an AofA (Array of Arrays).
+    // n: 0-n (Cannot be negative.)
+    // fun: A callback that contains $paintApi commands or any other code.
+    this.api.layer = function (n) {
+      p.#layer = n;
+      return p.api;
+    };
+  }
+
+  // Paints every layer.
+  paint() {
+    this.#layers.forEach((layer) => {
+      layer.forEach((paint) => paint());
+    });
+    this.#layers.length = 0;
+    this.#layer = 0;
   }
 }
 
-// Allows grouping & composing painting order using an AofA (Array of Arrays).
-// n: 0-n (Cannot be negative.)
-// fun: A callback that contains $paintApi commands or any other code.
-$paintApi.layer = function (n) {
-  paintLayer = n;
-  return $paintApi;
-};
+const painting = new Painting();
 
-// 2. Loading the disk.
+// 2. ✔ Loading the disk.
 const { load, send } = (() => {
   let loadUrlCount = 1;
   let loadHost; // = "disks.aesthetic.computer"; TODO: Add default host here.
@@ -242,7 +275,7 @@ const { load, send } = (() => {
   return { load, send };
 })();
 
-// 3. Produce a frame.
+// 3. ✔ Produce a frame.
 // Boot procedure:
 // First `paint` happens after `boot`, then any `act` and `sim`s each frame
 // before `paint`ing occurs. (which is tied to display refresh right now but it
@@ -253,7 +286,7 @@ function makeFrame({ data: { type, content } }) {
   if (type === "beat") {
     const $api = {};
     Object.assign($api, $commonApi);
-    $api.graph = $paintApi; // TODO: Should this eventually be removed?
+    $api.graph = painting.api; // TODO: Should this eventually be removed?
 
     $api.sound = {
       time: content.time,
@@ -346,10 +379,6 @@ function makeFrame({ data: { type, content } }) {
         });
       };
 
-      //$api.upload = new Promise((resolve, reject) => {
-
-      //})
-
       // Ingest all pen input events by running act for each event.
       content.pen.forEach((data) => {
         Object.assign(data, { device: "pen", is: (e) => e === data.name });
@@ -376,7 +405,7 @@ function makeFrame({ data: { type, content } }) {
     if (content.needsRender) {
       const $api = {};
       Object.assign($api, $commonApi);
-      Object.assign($api, $paintApi);
+      Object.assign($api, painting.api);
       $api.paintCount = Number(paintCount);
 
       let pixels = new ImageData(
@@ -467,17 +496,9 @@ function makeFrame({ data: { type, content } }) {
       // default returns undefined. -- Is this really what I want? 2021.11.27.16.20
       const paintChanged = paint($api) === false ? false : true;
 
-      // Run everything that was specified to be painted via layer > 0, then
+      // Run everything that was specified to be painted then
       // devour paintLayers.
-
-      paintLayers.forEach((layer) => {
-        layer.forEach((paint) => {
-          // console.log(paint);
-          paint();
-        });
-      });
-      paintLayers.length = 0;
-      paintLayer = 0;
+      painting.paint();
 
       // Return frame data back to the main thread.
       const sendData = { pixels: screen.pixels };
