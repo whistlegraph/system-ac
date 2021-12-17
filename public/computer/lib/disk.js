@@ -138,7 +138,8 @@ const $paintApiUnwrapped = {
   },
   copy: graph.copy,
   paste: graph.paste,
-  plot: graph.plot,
+  plot: graph.plot, // TODO: Should this be renamed to set?
+  point: graph.point,
   line: graph.line,
   box: graph.box,
   grid: graph.grid,

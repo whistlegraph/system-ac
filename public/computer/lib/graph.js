@@ -110,6 +110,14 @@ function plot(x, y) {
   }
 }
 
+// Plots a single pixel within the panned coordinate space.
+// Basically a wrapper over plot, which should ultimately be renamed to set?
+function point(x, y) {
+  x += panTranslation.x;
+  y += panTranslation.y;
+  plot(x, y);
+}
+
 // TODO: Implement panTranslation for primitives other than line?
 function pan(x, y) {
   if (y === undefined) y = x;
@@ -371,7 +379,7 @@ function grid({ box: { x, y, w: cols, h: rows }, scale, center }, buffer) {
 // Loading & rendering stored drawings. TODO: Store this on another layer of
 //                                            abstraction? 2021.12.13.22.04
 // Silently fails if `drawing` is left `undefined`.
-function draw(drawing, x, y, scale = 3, angle = 0) {
+function draw(drawing, x, y, scale = 1, angle = 0) {
   if (drawing === undefined) return;
 
   // TODO: Eventually make this the call: rotatePoint(args[0], args[1], 0, 0);
@@ -383,19 +391,21 @@ function draw(drawing, x, y, scale = 3, angle = 0) {
   drawing.commands.forEach(({ name, args }) => {
     args = args.map((a) => a * scale); // TODO: Add scale in addition to pan.
 
-    let x1 = args[0]; // x1
-    let y1 = args[1]; // y1
+    if (name === "line") {
+      let x1 = args[0]; // x1
+      let y1 = args[1]; // y1
 
-    let x2 = args[2]; // x2
-    let y2 = args[3]; // y2
+      let x2 = args[2]; // x2
+      let y2 = args[3]; // y2
 
-    let nx1 = x1 * c - y1 * s;
-    let ny1 = x1 * s + y1 * c;
+      let nx1 = x1 * c - y1 * s;
+      let ny1 = x1 * s + y1 * c;
 
-    let nx2 = x2 * c - y2 * s;
-    let ny2 = x2 * s + y2 * c;
+      let nx2 = x2 * c - y2 * s;
+      let ny2 = x2 * s + y2 * c;
 
-    if (name === "line") line(nx1, ny1, nx2, ny2);
+      line(nx1, ny1, nx2, ny2);
+    } else if (name === "point") point(...args);
   });
   unpan();
 }
@@ -409,7 +419,20 @@ function noise16() {
   }
 }
 
-export { clear, plot, pan, unpan, copy, paste, line, box, grid, draw, noise16 };
+export {
+  clear,
+  point,
+  plot,
+  pan,
+  unpan,
+  copy,
+  paste,
+  line,
+  box,
+  grid,
+  draw,
+  noise16,
+};
 
 // 3. 3D Drawing (Kinda mixed with some 2D)
 
