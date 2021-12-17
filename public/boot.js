@@ -11,6 +11,15 @@
 
 // After Oliver + Mija:
 
+// TODO: * Reload disk when the file changes.
+//         (This should work in production via a secondary disk server.)
+//       * Reload system (browser) when any other files change.
+
+// TODO: Add versioning of some kind for disk files, using a comment at the top.
+//       * This would eventually allow me to completely change from JavaScript.
+//       * More importantly, I could reload a different commit of the system,
+//         that matches the query.
+
 // TODO: Add stochastic syntax / DSL for basic drawing?
 //wipe.ink.line.line.line.ink("red").box;
 
